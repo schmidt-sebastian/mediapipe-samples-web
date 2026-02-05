@@ -128,7 +128,6 @@ function displayVideoDetections(result: ObjectDetectorResult) {
       // Draw label text
       canvasCtx.fillStyle = '#ffffff';
       canvasCtx.fillText(labelText, mirroredX + 5, originY + 18);
-      // --- FIX END ---
     }
   }
   canvasCtx.restore();
