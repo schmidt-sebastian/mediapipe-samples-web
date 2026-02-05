@@ -11,7 +11,7 @@ let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
 
 // Initialize the object detector
 const initializeObjectDetector = async () => {
-  const vision = await FilesetResolver.forVisionTasks('/wasm');
+  const vision = await FilesetResolver.forVisionTasks('/mediapipe-samples-web/wasm');
   
   objectDetector = await ObjectDetector.createFromOptions(vision, {
     baseOptions: {
