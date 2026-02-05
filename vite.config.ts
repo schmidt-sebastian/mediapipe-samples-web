@@ -2,14 +2,16 @@ import { defineConfig } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 export default defineConfig({
-  base: '/simple-mediapipe-demo/', 
-  
+  // 1. MATCH REPO NAME: Use your actual repository name here
+  base: '/mediapipe-samples-web/',
+
   plugins: [
     viteStaticCopy({
       targets: [
         {
-          src: 'node_modules/@mediapipe/tasks-vision/wasm',
-          dest: '.'
+          // 2. TARGET FOLDER: Copy the files INTO a 'wasm' folder
+          src: 'node_modules/@mediapipe/tasks-vision/wasm/*',
+          dest: 'wasm'
         }
       ]
     })
