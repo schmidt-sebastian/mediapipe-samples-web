@@ -3,24 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MediaPipe Object Detection (TS)</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap"
+      rel="stylesheet">
+    <title>MediaPipe Web Task Demo</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   </head>
   <body>
-    <h1>MediaPipe Object Detection (TypeScript)</h1>
-    <p>Click "Enable Webcam" to start detecting objects.</p>
-
-    <section id="demos" class="invisible">
-      <div id="liveView" class="camView">
-        <button id="webcamButton" class="mdc-button mdc-button--raised">
-          <span class="mdc-button__label">Enable Webcam</span>
-        </button>
-        <div style="position: relative;">
-          <video id="webcam" autoplay playsinline></video>
-          <canvas id="output_canvas"></canvas>
-        </div>
-      </div>
-    </section>
-    
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
