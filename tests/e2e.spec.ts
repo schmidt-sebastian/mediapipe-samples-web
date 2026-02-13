@@ -27,12 +27,12 @@ test.describe('Navigation & UI', () => {
     // .sidebar-nav display: none in media query
     await expect(page.locator('.sidebar-nav')).toBeHidden();
 
-    // Toggle menu
-    await page.click('.menu-toggle');
+    // Toggle menu (using mobile header toggle)
+    await page.click('.mobile-header .menu-toggle');
     await expect(page.locator('.sidebar-nav')).toBeVisible();
 
-    // Toggle back
-    await page.click('.menu-toggle');
+    // Toggle back (using sidebar toggle, since mobile one is covered)
+    await page.click('.sidebar-header .menu-toggle');
     await expect(page.locator('.sidebar-nav')).toBeHidden();
   });
 });

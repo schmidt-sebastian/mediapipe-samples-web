@@ -120,16 +120,29 @@ async function initializeSegmenter() {
   try {
     vision = await FilesetResolver.forVisionTasks('/mediapipe-samples-web/wasm');
 
-    imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
+    // Check for delegate override in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const delegateParam = urlParams.get('delegate');
+    if (delegateParam === 'CPU' || delegateParam === 'GPU') {
+      currentDelegate = delegateParam;
+    }
+
+    const options: any = {
       baseOptions: {
         modelAssetPath: currentModelUrl,
         delegate: currentDelegate,
       },
-      canvas: canvasElement, // Provide main DOM canvas for WebGL
       outputCategoryMask: true,
       outputConfidenceMasks: true,
       runningMode: runningMode,
-    });
+    };
+
+    // Only pass canvas if using GPU, otherwise we might trigger GPU dependencies on CPU
+    if (currentDelegate === 'GPU') {
+      options.canvas = canvasElement;
+    }
+
+    imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
 
     // Get labels if available
     modelLabels = imageSegmenter.getLabels();
@@ -174,6 +187,7 @@ async function initializeSegmenter() {
             modelAssetPath: currentModelUrl,
             delegate: 'CPU',
           },
+          // Do not pass canvas for CPU fallback
           outputCategoryMask: true,
           outputConfidenceMasks: true,
           runningMode: runningMode,
@@ -378,6 +392,9 @@ function setupUI() {
   }
 
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
+  if (delegateSelect && currentDelegate) {
+    delegateSelect.value = currentDelegate;
+  }
   delegateSelect.addEventListener('change', async () => {
     currentDelegate = delegateSelect.value as 'GPU' | 'CPU';
     enableWebcamButton.innerText = 'Loading...';
@@ -387,7 +404,6 @@ function setupUI() {
 
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   const imagePreviewContainer = document.getElementById('image-preview-container')!;
-  const testImage = document.getElementById('test-image') as HTMLImageElement;
 
   const dropzone = document.querySelector('.upload-dropzone') as HTMLElement;
   if (dropzone) {
@@ -502,6 +518,9 @@ async function segmentImage(image: HTMLImageElement) {
       if (mask[i] > maxConfidence) maxConfidence = mask[i];
     }
   }
+
+  const existingResults = document.querySelectorAll('#test-results');
+  existingResults.forEach(el => el.remove());
 
   const resultsEl = document.createElement('div');
   resultsEl.id = 'test-results';

@@ -1,134 +1,92 @@
-import './style.css';
-import {
-  ObjectDetector,
-  FilesetResolver,
-  ObjectDetectorResult
-} from '@mediapipe/tasks-vision';
+import './app_clean.css';
+import { setupObjectDetection, cleanupObjectDetection } from './tasks/object-detection';
+import { setupImageSegmentation, cleanupImageSegmentation } from './tasks/image-segmentation';
+import { renderSidebar } from './ui/sidebar';
+import { renderMobileNav } from './ui/mobile-nav';
 
-const demosSection = document.getElementById('demos') as HTMLElement;
-let objectDetector: ObjectDetector | undefined;
-let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
+const app = document.querySelector<HTMLDivElement>('#app')!;
 
-// Initialize the object detector
-const initializeObjectDetector = async () => {
-  const vision = await FilesetResolver.forVisionTasks('/mediapipe-samples-web/wasm');
-  
-  objectDetector = await ObjectDetector.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: `https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite`,
-      delegate: 'GPU',
-    },
-    scoreThreshold: 0.5,
-    runningMode: runningMode,
+// 1. Setup App Shell
+app.innerHTML = `
+  <div class="app-container">
+    <aside class="sidebar"></aside>
+    <div class="mobile-header">
+       <button class="menu-toggle material-icons" style="margin-right: 12px; color: var(--text-secondary); background: none; border: none; font-size: 24px; cursor: pointer;">menu</button>
+       <div id="mobile-nav-container" style="display: flex; align-items: center; flex-grow: 1;"></div>
+    </div>
+    <main class="main-content"></main>
+  </div>
+`;
+
+// 2. Render Global Components
+const sidebar = app.querySelector('.sidebar') as HTMLElement;
+renderSidebar(sidebar);
+
+const mobileNavContainer = app.querySelector('#mobile-nav-container') as HTMLElement;
+renderMobileNav(mobileNavContainer);
+
+// 3. Setup Navigation Logic
+const menuToggles = app.querySelectorAll('.menu-toggle');
+menuToggles.forEach(toggle => {
+  toggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
   });
-  
-  demosSection.classList.remove('invisible');
+});
+
+// Close sidebar when a link is clicked
+sidebar.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('a')) {
+    sidebar.classList.remove('open');
+  }
+});
+
+const mainContent = app.querySelector('.main-content') as HTMLElement;
+
+// 4. Router Setup
+const routes = {
+  '/vision/object_detector': { setup: setupObjectDetection, cleanup: cleanupObjectDetection, label: 'Object Detection' },
+  '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
 };
-initializeObjectDetector();
 
-const video = document.getElementById('webcam') as HTMLVideoElement;
-const canvasElement = document.getElementById('output_canvas') as HTMLCanvasElement;
-const canvasCtx = canvasElement.getContext('2d')!;
-const enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
+let currentCleanup: (() => void) | undefined;
 
-// Check if webcam access is supported
-const hasGetUserMedia = () => !!navigator.mediaDevices?.getUserMedia;
+async function router() {
+  let hash = window.location.hash.slice(1);
 
-if (hasGetUserMedia()) {
-  enableWebcamButton.addEventListener('click', enableCam);
-} else {
-  console.warn('getUserMedia() is not supported by your browser');
-}
-
-async function enableCam() {
-  if (!objectDetector) {
-    console.log('Wait! objectDetector not loaded yet.');
-    return;
+  // Handle root or invalid routes by defaulting to object detector
+  if (!hash || !routes[hash as keyof typeof routes]) {
+    hash = '/vision/object_detector';
+    window.location.hash = hash;
   }
 
-  // Toggle button text
-  if (video.paused) {
-    enableWebcamButton.innerText = 'Disable Webcam';
-    const constraints = {
-      video: true,
-    };
+  const route = routes[hash as keyof typeof routes];
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      video.addEventListener('loadeddata', predictWebcam);
-    } catch (err) {
-      console.error(err);
-    }
-  } else {
-    // Stop the camera
-    const stream = video.srcObject as MediaStream;
-    const tracks = stream.getTracks();
-    tracks.forEach((track) => track.stop());
-    video.srcObject = null;
-    enableWebcamButton.innerText = 'Enable Webcam';
+  // Cleanup previous task
+  if (currentCleanup) {
+    currentCleanup();
+    currentCleanup = undefined;
+  }
+
+  // Clear main content area only
+  mainContent.innerHTML = '';
+
+  // Setup new task
+  if (route) {
+    await route.setup(mainContent);
+    currentCleanup = route.cleanup;
+    document.title = `${route.label} - MediaPipe Web Task Demo`;
+
+    // Update active state in sidebar
+    const links = sidebar.querySelectorAll('a');
+    links.forEach(l => {
+      if (l.getAttribute('href') === `#${hash}`) l.classList.add('active');
+      else l.classList.remove('active');
+    });
   }
 }
 
-let lastVideoTime = -1;
-async function predictWebcam() {
-  if (!objectDetector) return;
-  // If video is not active, stop loop
-  if (!video.srcObject) return;
+window.addEventListener('hashchange', router);
+window.addEventListener('load', router);
 
-  // Change running mode to VIDEO for stream
-  if (runningMode === 'IMAGE') {
-    runningMode = 'VIDEO';
-    await objectDetector.setOptions({ runningMode: 'VIDEO' });
-  }
-
-  let startTimeMs = performance.now();
-
-  // Detect objects if frame is new
-  if (video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const detections = objectDetector.detectForVideo(video, startTimeMs);
-    displayVideoDetections(detections);
-  }
-
-  window.requestAnimationFrame(predictWebcam);
-}
-
-function displayVideoDetections(result: ObjectDetectorResult) {
-  // Match canvas size to video size
-  canvasElement.width = video.videoWidth;
-  canvasElement.height = video.videoHeight;
-
-  canvasCtx.save();
-  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-  if (result.detections) {
-    for (let detection of result.detections) {
-      canvasCtx.beginPath();
-      canvasCtx.lineWidth = 4;
-      canvasCtx.strokeStyle = '#007f8b'; 
-
-      const { originX, originY, width, height } = detection.boundingBox!;
-
-      // Use mirroredX instead of originX for drawing
-      const mirroredX = video.videoWidth - width - originX;
-      canvasCtx.strokeRect(mirroredX, originY, width, height);
-
-      // Draw label background
-      canvasCtx.fillStyle = '#007f8b';
-      canvasCtx.font = '16px sans-serif';
-      
-      const category = detection.categories[0];
-      const score = category.score ? Math.round(category.score * 100) : 0;
-      const labelText = `${category.categoryName} - ${score}%`;
-
-      const textWidth = canvasCtx.measureText(labelText).width;
-      canvasCtx.fillRect(mirroredX, originY, textWidth + 10, 25);
-
-      // Draw label text
-      canvasCtx.fillStyle = '#ffffff';
-      canvasCtx.fillText(labelText, mirroredX + 5, originY + 18);
-    }
-  }
-  canvasCtx.restore();
-}
+// Initialize router immediately to handle initial load
+router();

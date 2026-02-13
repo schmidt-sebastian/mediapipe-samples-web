@@ -42,6 +42,12 @@ export async function setupObjectDetection(container: HTMLElement) {
 }
 
 async function initializeDetector() {
+  // Check for delegate override in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const delegateParam = urlParams.get('delegate');
+  if (delegateParam === 'CPU' || delegateParam === 'GPU') {
+    currentDelegate = delegateParam;
+  }
   const vision = await FilesetResolver.forVisionTasks('/mediapipe-samples-web/wasm');
 
   // Clean up existing if needed
@@ -292,8 +298,15 @@ function setupUI() {
     currentDelegate = delegateSelect.value as 'GPU' | 'CPU';
     enableWebcamButton.innerText = 'Loading...';
     enableWebcamButton.disabled = true;
+    enableWebcamButton.innerText = 'Loading...';
+    enableWebcamButton.disabled = true;
     await initializeDetector();
   });
+
+  // Sync initial value from state (e.g. URL override)
+  if (currentDelegate) {
+    delegateSelect.value = currentDelegate;
+  }
 }
 
 async function detectImage(image: HTMLImageElement) {
@@ -412,12 +425,12 @@ function displayVideoDetections(result: ObjectDetectorResult) {
 
   if (result.detections) {
     for (let detection of result.detections) {
-      drawDetection(canvasCtx, detection, true, video.videoWidth);
+      drawDetection(canvasCtx, detection, true);
     }
   }
 }
 
-function drawDetection(ctx: CanvasRenderingContext2D, detection: any, mirror: boolean, videoWidth?: number) {
+function drawDetection(ctx: CanvasRenderingContext2D, detection: any, mirror: boolean) {
   ctx.beginPath();
   ctx.lineWidth = 4;
   ctx.strokeStyle = '#007f8b';
