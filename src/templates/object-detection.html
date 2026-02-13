@@ -97,7 +97,7 @@
             <!-- Image View -->
             <div id="view-image" class="view-content active">
                 <div class="upload-dropzone">
-                    <div class="dropzone-content">
+                    <div class="dropzone-content" style="display: none;">
                         <span class="material-icons large-icon">image</span>
                         <p>Drag and drop or click to upload</p>
                         <input type="file" id="image-upload" accept="image/*">
@@ -106,7 +106,7 @@
                         <img id="test-image" src="dog.jpg" crossorigin="anonymous" />
                         <canvas id="image-canvas"></canvas>
                     </div>
-                    <button id="re-upload-btn" class="action-button re-upload" style="display: none;">
+                    <button id="re-upload-btn" class="action-button re-upload" style="display: flex;">
                         <span class="material-icons">upload</span> Upload New Image
                     </button>
                 </div>

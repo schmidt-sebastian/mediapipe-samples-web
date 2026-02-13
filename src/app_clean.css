@@ -621,7 +621,7 @@ video {
 .re-upload {
   /* It inherits .action-button absolute positioning now */
     /* Remove overrides that made it relative */
-    display: flex !important;
+    display: flex;
     /* Ensure it's displayed when active */
 }
 
