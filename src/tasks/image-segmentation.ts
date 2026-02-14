@@ -95,7 +95,22 @@ function setupWorkerListener() {
         enableWebcamButton.disabled = false;
         enableWebcamButton.innerText = 'Enable Webcam';
         updateStatus(`Model loaded. Ready.`);
-        triggerInitialImageSegmentation();
+
+        if (runningMode === 'IMAGE') {
+          const testImage = document.getElementById('test-image') as HTMLImageElement;
+          if (testImage && testImage.style.display !== 'none' && testImage.src) {
+            if (testImage.complete && testImage.naturalWidth > 0) {
+              triggerInitialImageSegmentation();
+            } else {
+              testImage.onload = () => {
+                if (testImage.naturalWidth > 0) {
+                  triggerInitialImageSegmentation();
+                }
+              };
+            }
+          }
+        }
+
         if (runningMode === 'VIDEO' && video.srcObject) {
           enableCam();
         }
@@ -203,7 +218,9 @@ function triggerInitialImageSegmentation() {
       if (testImage.complete && testImage.naturalWidth > 0) {
         segmentImage(testImage);
       } else {
-        testImage.onload = () => segmentImage(testImage);
+        testImage.onload = () => {
+          if (testImage.naturalWidth > 0) segmentImage(testImage);
+        };
       }
     }
   }
@@ -261,8 +278,12 @@ function setupUI() {
     switchView('IMAGE');
   }
 
-  tabWebcam.addEventListener('click', () => switchView('VIDEO'));
-  tabImage.addEventListener('click', () => switchView('IMAGE'));
+  tabWebcam.addEventListener('click', () => {
+    if (runningMode !== 'VIDEO') switchView('VIDEO');
+  });
+  tabImage.addEventListener('click', () => {
+    if (runningMode !== 'IMAGE') switchView('IMAGE');
+  });
 
   // Model Tabs
   const tabModelList = document.getElementById('tab-model-list')!;
@@ -302,11 +323,7 @@ function setupUI() {
     modelSelect.appendChild(option);
   }
 
-  enableWebcamButton.addEventListener('click', enableCam);
-
-  if (storedMode === 'VIDEO') {
-    enableCam();
-  }
+  enableWebcamButton.addEventListener('click', toggleCam);
 
   modelSelect.addEventListener('change', async () => {
     const key = modelSelect.value;
@@ -404,7 +421,11 @@ function setupUI() {
         if (dropzoneContent) dropzoneContent.style.display = 'none';
         if (reUploadBtn) reUploadBtn.style.display = 'flex';
 
-        testImage.onload = () => segmentImage(testImage);
+        testImage.onload = () => {
+          if (testImage.naturalWidth > 0) {
+            segmentImage(testImage);
+          }
+        };
       };
       reader.readAsDataURL(file);
     }
@@ -517,24 +538,43 @@ async function segmentImage(image: HTMLImageElement) {
 }
 
 async function enableCam() {
-  if (video.paused) {
-    enableWebcamButton.innerText = 'Disable Webcam';
-    const constraints = { video: true };
+  if (video.srcObject) return;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      video.addEventListener('loadeddata', predictWebcam);
-      runningMode = 'VIDEO';
-      if (isWorkerReady) segmentationWorker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
-      updateStatus('Webcam running...');
-    } catch (err) {
-      console.error(err);
-      updateStatus('Camera error!');
+  enableWebcamButton.innerText = 'Starting...';
+  enableWebcamButton.disabled = true;
+  const constraints = { video: true };
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+
+    const playAndPredict = () => {
+      video.play().catch(console.error);
+      predictWebcam();
+    };
+
+    if (video.readyState >= 2) {
+      playAndPredict();
+    } else {
+      video.addEventListener('loadeddata', playAndPredict, { once: true });
     }
-  } else {
-    stopCam();
+
+    runningMode = 'VIDEO';
+    if (isWorkerReady) segmentationWorker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
+    updateStatus('Webcam running...');
+    enableWebcamButton.innerText = 'Disable Webcam';
+    enableWebcamButton.disabled = false;
+  } catch (err) {
+    console.error(err);
+    updateStatus('Camera error!');
+    enableWebcamButton.innerText = 'Enable Webcam';
+    enableWebcamButton.disabled = false;
   }
+}
+
+function toggleCam() {
+  if (video.srcObject) stopCam();
+  else enableCam();
 }
 
 function stopCam() {
@@ -560,7 +600,19 @@ async function predictWebcam() {
     isSegmentingVideo = true;
 
     try {
-      const bitmap = await window.createImageBitmap(video);
+      let bitmap: ImageBitmap;
+      // CI / Headless Workaround: SwiftShader WebGL crashes when MediaPipe WASM reads a hardware-backed MediaStream ImageBitmap
+      if (navigator.webdriver) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth || 640;
+        tempCanvas.height = video.videoHeight || 480;
+        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        bitmap = await window.createImageBitmap(tempCanvas);
+      } else {
+        bitmap = await window.createImageBitmap(video);
+      }
+
       segmentationWorker?.postMessage({
         type: 'SEGMENT_VIDEO',
         bitmap: bitmap,

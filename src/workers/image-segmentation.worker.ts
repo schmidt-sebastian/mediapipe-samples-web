@@ -22,8 +22,16 @@ let isInitializing = false;
 let currentOptions: any = {};
 let basePath = '/';
 
+let isProcessing = false;
+
 self.onmessage = async (event) => {
   const { type } = event.data;
+
+  // Simple queue/lock to prevent calling WASM inference while setOptions is yielding the thread
+  while (isProcessing) {
+    await new Promise(resolve => setTimeout(result => resolve(true), 10));
+  }
+  isProcessing = true;
 
   try {
     if (type === 'INIT') {
@@ -59,45 +67,51 @@ self.onmessage = async (event) => {
       const startTimeMs = performance.now();
 
       const callback = (result: ImageSegmenterResult) => {
-        const inferenceTime = performance.now() - startTimeMs;
-        bitmap.close();
+        try {
+          console.log('Worker callback fired!');
+          const inferenceTime = performance.now() - startTimeMs;
+          bitmap.close();
 
-        let maskBitmap: ImageBitmap | null = null;
-        let width = 0;
-        let height = 0;
+          let maskBitmap: ImageBitmap | null = null;
+          let width = 0;
+          let height = 0;
 
-        if (result.categoryMask && renderCanvas && drawingUtils && colors) {
-          width = result.categoryMask.width;
-          height = result.categoryMask.height;
+          if (result.categoryMask && renderCanvas && drawingUtils && colors) {
+            width = result.categoryMask.width;
+            height = result.categoryMask.height;
 
-          // Resize offscreen canvas to match mask bounds natively
-          if (renderCanvas.width !== width || renderCanvas.height !== height) {
-            renderCanvas.width = width;
-            renderCanvas.height = height;
+            // Resize offscreen canvas to match mask bounds natively
+            if (renderCanvas.width !== width || renderCanvas.height !== height) {
+              renderCanvas.width = width;
+              renderCanvas.height = height;
+            }
+
+            // Let the GPU bind the Texture and write directly onto our Canvas Buffer
+            drawingUtils.drawCategoryMask(
+              result.categoryMask,
+              colors,
+              [0, 0, 0, 0]
+            );
+
+            // Zero-copy extract the final Colored bitmap to jump the thread wall
+            maskBitmap = renderCanvas.transferToImageBitmap();
+
+            // Free WASM WebGL memory immediately
+            result.categoryMask.close();
           }
 
-          // Let the GPU bind the Texture and write directly onto our Canvas Buffer
-          drawingUtils.drawCategoryMask(
-            result.categoryMask,
-            colors,
-            [0, 0, 0, 0]
-          );
-
-          // Zero-copy extract the final Colored bitmap to jump the thread wall
-          maskBitmap = renderCanvas.transferToImageBitmap();
-
-          // Free WASM WebGL memory immediately
-          result.categoryMask.close();
+          (self as any).postMessage({
+            type: 'SEGMENT_RESULT',
+            mode: requiredMode,
+            maskBitmap: maskBitmap,
+            width: width,
+            height: height,
+            inferenceTime: inferenceTime
+          }, maskBitmap ? [maskBitmap] : []);
+        } catch (e: any) {
+          console.error("Worker callback error:", e);
+          (self as any).postMessage({ type: 'SEGMENT_ERROR', error: e.message || 'Worker callback error', mode: requiredMode });
         }
-
-        (self as any).postMessage({
-          type: 'SEGMENT_RESULT',
-          mode: requiredMode,
-          maskBitmap: maskBitmap,
-          width: width,
-          height: height,
-          inferenceTime: inferenceTime
-        }, maskBitmap ? [maskBitmap] : []);
       };
 
       try {
@@ -123,6 +137,8 @@ self.onmessage = async (event) => {
   } catch (error: any) {
     console.error("Image Segmentation Worker Error:", error);
     self.postMessage({ type: 'ERROR', error: error?.message || String(error) });
+  } finally {
+    isProcessing = false;
   }
 };
 

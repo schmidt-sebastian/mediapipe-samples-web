@@ -75,8 +75,10 @@ function handleWorkerMessage(event: MessageEvent) {
             hideDropzone();
           } else {
             testImage.onload = () => {
-              detectImage(testImage);
-              hideDropzone();
+              if (testImage.naturalWidth > 0) {
+                detectImage(testImage);
+                hideDropzone();
+              }
             };
           }
         }
@@ -211,14 +213,18 @@ function setupUI() {
     switchView('IMAGE');
   }
 
-  tabWebcam.addEventListener('click', () => switchView('VIDEO'));
-  tabImage.addEventListener('click', () => switchView('IMAGE'));
+  tabWebcam.addEventListener('click', () => {
+    if (runningMode !== 'VIDEO') switchView('VIDEO');
+  });
+  tabImage.addEventListener('click', () => {
+    if (runningMode !== 'IMAGE') switchView('IMAGE');
+  });
 
   // Define enableCam before using it if possible, or hoist it?
   // enableCam is defined below so it's hoisted.
 
   // Webcam Button
-  enableWebcamButton.addEventListener('click', enableCam);
+  enableWebcamButton.addEventListener('click', toggleCam);
 
   // Auto-Start Check
 
@@ -286,7 +292,9 @@ function setupUI() {
     // Trigger re-detection if in image mode
     if (runningMode === 'IMAGE') {
       const testImage = document.getElementById('test-image') as HTMLImageElement;
-      if (testImage.src) detectImage(testImage);
+      if (testImage && testImage.src && testImage.naturalWidth > 0) {
+        detectImage(testImage);
+      }
     }
   });
 
@@ -298,12 +306,14 @@ function setupUI() {
     worker?.postMessage({ type: 'SET_OPTIONS', scoreThreshold });
     if (runningMode === 'IMAGE') {
       const testImage = document.getElementById('test-image') as HTMLImageElement;
-      if (testImage.src) detectImage(testImage);
+      if (testImage && testImage.src && testImage.naturalWidth > 0) {
+        detectImage(testImage);
+      }
     }
   });
 
   // Webcam
-  enableWebcamButton.addEventListener('click', enableCam);
+  enableWebcamButton.addEventListener('click', toggleCam);
 
   // Image Upload
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
@@ -337,7 +347,9 @@ function setupUI() {
         if (reUploadBtn) reUploadBtn.style.display = 'flex';
 
         testImage.onload = () => {
-          detectImage(testImage);
+          if (testImage.naturalWidth > 0) {
+            detectImage(testImage);
+          }
         };
       };
       reader.readAsDataURL(file);
@@ -361,7 +373,7 @@ function setupUI() {
 }
 
 async function detectImage(image: HTMLImageElement) {
-  if (!worker) return;
+  if (!worker || !isWorkerReady) return;
 
   // Ensure running mode is IMAGE
   if (runningMode !== 'IMAGE') {
@@ -413,26 +425,46 @@ function displayImageDetections(result: ObjectDetectorResult, image: HTMLImageEl
 }
 
 async function enableCam() {
-  if (!worker) return;
+  if (!worker || video.srcObject) return;
 
-  if (video.paused) {
-    enableWebcamButton.innerText = 'Disable Webcam';
-    const constraints = { video: true };
+  enableWebcamButton.innerText = 'Starting...';
+  enableWebcamButton.disabled = true;
+  const constraints = { video: true };
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      video.addEventListener('loadeddata', predictWebcam);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
 
-      // Make sure mode is VIDEO
-      runningMode = 'VIDEO';
-      worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
+    const playAndPredict = () => {
+      video.play().catch(console.error);
+      predictWebcam();
+    };
 
-    } catch (err) {
-      console.error(err);
+    if (video.readyState >= 2) {
+      playAndPredict();
+    } else {
+      video.addEventListener('loadeddata', playAndPredict, { once: true });
     }
-  } else {
+
+    // Make sure mode is VIDEO
+    runningMode = 'VIDEO';
+    worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
+    updateStatus('Webcam running...');
+    enableWebcamButton.innerText = 'Disable Webcam';
+    enableWebcamButton.disabled = false;
+  } catch (err) {
+    console.error(err);
+    updateStatus('Camera error!');
+    enableWebcamButton.innerText = 'Enable Webcam';
+    enableWebcamButton.disabled = false;
+  }
+}
+
+function toggleCam() {
+  if (video.srcObject) {
     stopCam();
+  } else {
+    enableCam();
   }
 }
 
@@ -453,7 +485,7 @@ async function predictWebcam() {
   }
 
   // Wait for worker to finish initializing (e.g., during delegate or model switch)
-  if (!isWorkerReady) {
+  if (!isWorkerReady || !worker) {
     animationFrameId = window.requestAnimationFrame(predictWebcam);
     return;
   }
@@ -464,7 +496,18 @@ async function predictWebcam() {
     // We send the current frame to the worker. 
     // The worker will request the next frame by telling us it's done via `DETECT_RESULT`
     try {
-      const bitmap = await createImageBitmap(video);
+      let bitmap: ImageBitmap;
+      if (navigator.webdriver) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth || 640;
+        tempCanvas.height = video.videoHeight || 480;
+        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        bitmap = await window.createImageBitmap(tempCanvas);
+      } else {
+        bitmap = await window.createImageBitmap(video);
+      }
+
       worker?.postMessage({
         type: 'DETECT_VIDEO',
         bitmap: bitmap,

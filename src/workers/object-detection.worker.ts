@@ -19,8 +19,16 @@ let isInitializing = false;
 let currentOptions: any = {};
 let basePath = '/';
 
+let isProcessing = false;
+
 self.onmessage = async (event) => {
   const { type } = event.data;
+
+  // Simple queue/lock to prevent calling WASM inference while setOptions is yielding the thread
+  while (isProcessing) {
+    await new Promise(resolve => setTimeout(result => resolve(true), 10));
+  }
+  isProcessing = true;
 
   try {
     if (type === 'INIT') {
@@ -91,6 +99,8 @@ self.onmessage = async (event) => {
   } catch (error: any) {
     console.error("Object Detection Worker Error:", error);
     self.postMessage({ type: 'ERROR', error: error?.message || String(error) });
+  } finally {
+    isProcessing = false;
   }
 };
 

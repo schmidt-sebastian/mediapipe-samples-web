@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { downloadTestImage } from './utils';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 test.describe('Image Segmentation Task', () => {
   let imagePath: string;
 
-  test.beforeAll(async () => {
-    imagePath = await downloadTestImage('dog.jpg', 'https://storage.googleapis.com/mediapipe-assets/dog_fluffy.jpg');
+  test.beforeAll(() => {
+    imagePath = path.resolve(__dirname, 'assets', 'dog.jpg');
   });
 
   test.beforeEach(async ({ page }) => {
@@ -113,6 +117,80 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#status-message')).toContainText('Done', { timeout: 30000 });
 
     // Verify result is present (visual regression might differ slightly on GPU, so maybe just check functionality)
+  });
+
+  test('should handle model switching', async ({ page }) => {
+    await page.selectOption('#model-select', 'hair_segmenter');
+    await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)|(Done)/, { timeout: 60000 });
+
+    // Wait for worker re-instantiation to fully commit DOM layout reflow
+    await page.waitForTimeout(1000);
+
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.click('#tab-image');
+    await page.click('.upload-dropzone', { force: true });
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(imagePath);
+
+    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#test-results')).toBeAttached({ timeout: 15000 });
+  });
+
+  test('should handle opacity changes', async ({ page }) => {
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.click('#tab-image');
+    await page.click('.upload-dropzone');
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(imagePath);
+
+    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+
+    // Change Opacity to 0.2
+    await page.fill('#opacity', '0.2');
+    await page.locator('#opacity').dispatchEvent('input');
+
+    // Changing Opacity re-renders visually. Wait for a short bit
+    await page.waitForTimeout(500);
+
+    // We can just verify it doesn't crash and the canvas is still there
+    await expect(page.locator('#test-results')).toBeAttached();
+  });
+
+  test('should support webcam toggling', async ({ page }) => {
+    await page.click('#tab-webcam');
+    await page.waitForSelector('#webcamButton:not([disabled])');
+
+    await expect(page.locator('#webcamButton')).not.toHaveText('Initializing...', { timeout: 15000 });
+
+    // Wait for Worker to actually process and return at least ONE video frame through GPU/CPU pipeline
+    await expect(page.locator('#inference-time')).not.toHaveText('Inference Time: - ms', { timeout: 30000 });
+
+    // Disable
+    await page.click('#webcamButton', { force: true });
+    await expect(page.locator('#webcamButton')).toHaveText('Enable Webcam', { timeout: 10000 });
+  });
+
+  test('should handle custom model uploads', async ({ page }) => {
+    const modelPath = path.resolve(__dirname, 'assets', 'deeplab_v3.tflite');
+
+    // Switch to upload tab and provide file
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.click('#tab-model-upload');
+    await page.click('.file-upload-btn');
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(modelPath);
+
+    // Verify it loads
+    await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)|(Done)/, { timeout: 60000 });
+
+    // Verify it detects
+    const imgChooserPromise = page.waitForEvent('filechooser');
+    await page.click('#tab-image');
+    await page.click('.upload-dropzone');
+    const imgChooser = await imgChooserPromise;
+    await imgChooser.setFiles(imagePath);
+
+    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
     await expect(page.locator('#test-results')).toBeAttached();
   });
 });
