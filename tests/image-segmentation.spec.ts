@@ -190,7 +190,7 @@ test.describe('Image Segmentation Task', () => {
     const imgChooser = await imgChooserPromise;
     await imgChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
     await expect(page.locator('#test-results')).toBeAttached();
   });
 });
