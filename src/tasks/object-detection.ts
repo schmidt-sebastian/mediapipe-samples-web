@@ -50,7 +50,6 @@ function initWorker() {
     if (worker) {
     worker.onmessage = handleWorkerMessage;
   }
-  }
 }
 
 function handleWorkerMessage(event: MessageEvent) {
