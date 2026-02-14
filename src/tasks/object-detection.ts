@@ -1,10 +1,6 @@
-import {
-  ObjectDetector,
-  FilesetResolver,
-  ObjectDetectorResult
-} from '@mediapipe/tasks-vision';
+import { ObjectDetectorResult } from '@mediapipe/tasks-vision';
 
-let objectDetector: ObjectDetector | undefined;
+let worker: Worker | undefined;
 let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
 let video: HTMLVideoElement;
 let canvasElement: HTMLCanvasElement;
@@ -12,12 +8,13 @@ let canvasCtx: CanvasRenderingContext2D;
 let enableWebcamButton: HTMLButtonElement;
 let lastVideoTime = -1;
 let animationFrameId: number;
+let isWorkerReady = false;
 
 // Options
 let currentModel = 'efficientdet_lite0';
 let scoreThreshold = 0.5;
 let maxResults = 3;
-let currentDelegate: 'GPU' | 'CPU' = 'GPU';
+let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
 const models: Record<string, string> = {
   'efficientdet_lite0': 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite',
@@ -35,90 +32,127 @@ export async function setupObjectDetection(container: HTMLElement) {
   canvasCtx = canvasElement.getContext('2d')!;
   enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
 
-  // Initialize
-  await initializeDetector();
+  initWorker();
 
+  // Setup UI event listeners
   setupUI();
+
+  // Initialize detector via worker
+  await initializeDetector();
+}
+
+import ObjectDetectionWorker from '../workers/object-detection.worker.ts?worker';
+
+function initWorker() {
+  if (!worker) {
+    worker = new ObjectDetectionWorker();
+    worker.onmessage = handleWorkerMessage;
+  }
+}
+
+function handleWorkerMessage(event: MessageEvent) {
+  const { type } = event.data;
+
+  switch (type) {
+    case 'INIT_DONE':
+      document.querySelector('.viewport')?.classList.remove('loading-model');
+      isWorkerReady = true;
+      enableWebcamButton.disabled = false;
+      enableWebcamButton.innerText = 'Enable Webcam';
+
+      if (runningMode === 'VIDEO') {
+        if (video.srcObject) {
+          enableCam();
+        }
+      } else if (runningMode === 'IMAGE') {
+        const testImage = document.getElementById('test-image') as HTMLImageElement;
+        if (testImage.style.display !== 'none' && testImage.src) {
+          if (testImage.complete && testImage.naturalWidth > 0) {
+            detectImage(testImage);
+            hideDropzone();
+          } else {
+            testImage.onload = () => {
+              detectImage(testImage);
+              hideDropzone();
+            };
+          }
+        }
+      }
+      break;
+
+    case 'DELEGATE_FALLBACK':
+      console.warn('Worker fell back to CPU delegate.');
+      currentDelegate = 'CPU';
+      const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
+      if (delegateSelect) delegateSelect.value = 'CPU';
+      break;
+
+    case 'DETECT_RESULT':
+      const { mode, detections, inferenceTime } = event.data;
+      updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
+      updateInferenceTime(inferenceTime);
+
+      if (mode === 'IMAGE') {
+        const testImage = document.getElementById('test-image') as HTMLImageElement;
+        displayImageDetections(detections, testImage);
+      } else if (mode === 'VIDEO') {
+        // Render current video frame detections
+        displayVideoDetections(detections);
+
+        // Request next frame if still running video
+        if (video.srcObject && !video.paused) {
+          animationFrameId = window.requestAnimationFrame(predictWebcam);
+        }
+      }
+      break;
+
+    case 'ERROR':
+    case 'DETECT_ERROR':
+      console.error('Worker error:', event.data.error);
+      updateStatus(`Error: ${event.data.error}`);
+      break;
+  }
+}
+
+function hideDropzone() {
+  const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
+  const imagePreviewContainer = document.getElementById('image-preview-container');
+  const reUploadBtn = document.getElementById('re-upload-btn');
+  if (dropzoneContent) dropzoneContent.style.display = 'none';
+  if (imagePreviewContainer) imagePreviewContainer.style.display = '';
+  if (reUploadBtn) reUploadBtn.style.display = 'flex';
 }
 
 async function initializeDetector() {
   // Check for delegate override in URL
   const urlParams = new URLSearchParams(window.location.search);
   const delegateParam = urlParams.get('delegate');
-  if (delegateParam === 'CPU' || delegateParam === 'GPU') {
-    currentDelegate = delegateParam;
-  }
-  const vision = await FilesetResolver.forVisionTasks('/mediapipe-samples-web/wasm');
-
-  // Clean up existing if needed
-  // Note: ObjectDetector doesn't have a close() method in some versions, but if it did we should call it.
-
-  try {
-    objectDetector = await ObjectDetector.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: models[currentModel],
-        delegate: currentDelegate,
-      },
-      scoreThreshold: scoreThreshold,
-      maxResults: maxResults,
-      runningMode: runningMode,
-    });
-  } catch (gpuError) {
-    console.warn('GPU initialization failed, falling back to CPU', gpuError);
-    if (currentDelegate === 'GPU') {
-      currentDelegate = 'CPU';
-      const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
-      if (delegateSelect) delegateSelect.value = 'CPU';
-
-      objectDetector = await ObjectDetector.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: models[currentModel],
-          delegate: 'CPU',
-        },
-        scoreThreshold: scoreThreshold,
-        maxResults: maxResults,
-        runningMode: runningMode,
-      });
-    } else {
-      throw gpuError;
-    }
+  if (delegateParam === 'CPU') {
+    currentDelegate = 'CPU';
+  } else if (delegateParam === 'GPU') {
+    console.warn('GPU requested via URL, but Object Detection Worker only supports CPU. Forcing CPU.');
+    currentDelegate = 'CPU';
   }
 
-  enableWebcamButton.disabled = false;
-  enableWebcamButton.innerText = 'Enable Webcam';
-
-  if (runningMode === 'VIDEO') {
-    enableCam();
+  enableWebcamButton.disabled = true;
+  if (!video.srcObject) {
+    enableWebcamButton.innerText = 'Initializing...';
   }
+  document.querySelector('.viewport')?.classList.add('loading-model');
+  isWorkerReady = false;
 
-  // Re-run detection on image if active
-  // Re-run detection on image if active
-  if (runningMode === 'IMAGE') {
-    const testImage = document.getElementById('test-image') as HTMLImageElement;
-    if (testImage.style.display !== 'none' && testImage.src) {
-      if (testImage.complete && testImage.naturalWidth > 0) {
-        detectImage(testImage);
-        // Hide dropzone if image is present
-        const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-        const imagePreviewContainer = document.getElementById('image-preview-container');
-        if (dropzoneContent) dropzoneContent.style.display = 'none';
-        if (imagePreviewContainer) imagePreviewContainer.style.display = ''; // Let CSS grid handle it
-        const reUploadBtn = document.getElementById('re-upload-btn');
-        if (reUploadBtn) reUploadBtn.style.display = 'flex';
-      } else {
-        testImage.onload = () => {
-          detectImage(testImage);
-          // Hide dropzone if image is present
-          const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-          const imagePreviewContainer = document.getElementById('image-preview-container');
-          const reUploadBtn = document.getElementById('re-upload-btn');
-          if (dropzoneContent) dropzoneContent.style.display = 'none';
-          if (imagePreviewContainer) imagePreviewContainer.style.display = '';
-          if (reUploadBtn) reUploadBtn.style.display = 'flex';
-        };
-      }
-    }
-  }
+  // Tell worker to init
+  // @ts-ignore
+  const baseUrl = import.meta.env.BASE_URL;
+  worker?.postMessage({
+    type: 'INIT',
+    modelAssetPath: models[currentModel],
+    delegate: currentDelegate,
+    scoreThreshold: scoreThreshold,
+    maxResults: maxResults,
+    runningMode: runningMode,
+    baseUrl: baseUrl
+  });
 }
 
 function setupUI() {
@@ -140,7 +174,10 @@ function setupUI() {
       viewWebcam.classList.add('active');
       viewImage.classList.remove('active');
       runningMode = 'VIDEO';
-      if (objectDetector) objectDetector.setOptions({ runningMode: 'VIDEO' });
+      worker?.postMessage({
+        type: 'SET_OPTIONS',
+        runningMode: 'VIDEO'
+      });
       enableCam();
     } else {
       tabWebcam.classList.remove('active');
@@ -148,8 +185,19 @@ function setupUI() {
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
       runningMode = 'IMAGE';
-      if (objectDetector) objectDetector.setOptions({ runningMode: 'IMAGE' });
+      worker?.postMessage({
+        type: 'SET_OPTIONS',
+        runningMode: 'IMAGE'
+      });
       stopCam();
+
+      // Trigger detection on current image immediately
+      if (isWorkerReady) {
+        const testImage = document.getElementById('test-image') as HTMLImageElement;
+        if (testImage && testImage.src) {
+          detectImage(testImage);
+        }
+      }
     }
   };
 
@@ -231,7 +279,7 @@ function setupUI() {
   maxResultsInput.addEventListener('input', () => {
     maxResults = parseInt(maxResultsInput.value);
     maxResultsValue.innerText = maxResults.toString();
-    objectDetector?.setOptions({ maxResults });
+    worker?.postMessage({ type: 'SET_OPTIONS', maxResults });
     // Trigger re-detection if in image mode
     if (runningMode === 'IMAGE') {
       const testImage = document.getElementById('test-image') as HTMLImageElement;
@@ -244,7 +292,7 @@ function setupUI() {
   scoreThresholdInput.addEventListener('input', () => {
     scoreThreshold = parseFloat(scoreThresholdInput.value);
     scoreThresholdValue.innerText = scoreThreshold.toString();
-    objectDetector?.setOptions({ scoreThreshold });
+    worker?.postMessage({ type: 'SET_OPTIONS', scoreThreshold });
     if (runningMode === 'IMAGE') {
       const testImage = document.getElementById('test-image') as HTMLImageElement;
       if (testImage.src) detectImage(testImage);
@@ -310,21 +358,20 @@ function setupUI() {
 }
 
 async function detectImage(image: HTMLImageElement) {
-  if (!objectDetector) return;
+  if (!worker) return;
 
   // Ensure running mode is IMAGE
   if (runningMode !== 'IMAGE') {
     runningMode = 'IMAGE';
-    await objectDetector.setOptions({ runningMode: 'IMAGE' });
   }
 
-  const start = performance.now();
-  const detections = objectDetector.detect(image);
-  const time = performance.now() - start;
-  updateStatus(`Done in ${Math.round(time)}ms`);
-  updateInferenceTime(time);
-
-  displayImageDetections(detections, image);
+  const bitmap = await createImageBitmap(image);
+  updateStatus(`Processing image...`);
+  worker.postMessage({
+    type: 'DETECT_IMAGE',
+    bitmap: bitmap,
+    timestampMs: performance.now()
+  }, [bitmap]);
 }
 
 function displayImageDetections(result: ObjectDetectorResult, image: HTMLImageElement) {
@@ -363,7 +410,7 @@ function displayImageDetections(result: ObjectDetectorResult, image: HTMLImageEl
 }
 
 async function enableCam() {
-  if (!objectDetector) return;
+  if (!worker) return;
 
   if (video.paused) {
     enableWebcamButton.innerText = 'Disable Webcam';
@@ -376,7 +423,7 @@ async function enableCam() {
 
       // Make sure mode is VIDEO
       runningMode = 'VIDEO';
-      await objectDetector.setOptions({ runningMode: 'VIDEO' });
+      worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
 
     } catch (err) {
       console.error(err);
@@ -400,21 +447,35 @@ function stopCam() {
 async function predictWebcam() {
   if (runningMode === 'IMAGE') {
     runningMode = 'VIDEO';
-    await objectDetector?.setOptions({ runningMode: 'VIDEO' });
   }
 
-  let startTimeMs = performance.now();
+  // Wait for worker to finish initializing (e.g., during delegate or model switch)
+  if (!isWorkerReady) {
+    animationFrameId = window.requestAnimationFrame(predictWebcam);
+    return;
+  }
 
   if (video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
-    const detections = objectDetector?.detectForVideo(video, startTimeMs);
-    const time = performance.now() - startTimeMs;
-    updateInferenceTime(time);
 
-    if (detections) displayVideoDetections(detections);
+    // We send the current frame to the worker. 
+    // The worker will request the next frame by telling us it's done via `DETECT_RESULT`
+    try {
+      const bitmap = await createImageBitmap(video);
+      worker?.postMessage({
+        type: 'DETECT_VIDEO',
+        bitmap: bitmap,
+        timestampMs: performance.now()
+      }, [bitmap]);
+    } catch (e) {
+      console.error("Failed to create ImageBitmap from video", e);
+      // Try again next frame
+      animationFrameId = window.requestAnimationFrame(predictWebcam);
+    }
+  } else {
+    // If video hasn't advanced, just wait for next frame
+    animationFrameId = window.requestAnimationFrame(predictWebcam);
   }
-
-  animationFrameId = window.requestAnimationFrame(predictWebcam);
 }
 
 function displayVideoDetections(result: ObjectDetectorResult) {
@@ -496,8 +557,12 @@ export function cleanupObjectDetection() {
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
   }
-  objectDetector?.close();
-  objectDetector = undefined;
+
+  if (worker) {
+    worker.postMessage({ type: 'CLEANUP' });
+    // We optionally terminate the worker or keep it alive, let's keep it alive for faster resumes, 
+    // but tell it to close the internal mediapipe instance
+  }
 
   // Also clear canvas
   if (canvasCtx && canvasElement) {

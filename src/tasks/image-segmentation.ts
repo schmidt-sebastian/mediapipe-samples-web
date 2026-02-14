@@ -1,11 +1,9 @@
-import {
-  ImageSegmenter,
-  FilesetResolver,
-  ImageSegmenterResult,
-  DrawingUtils
-} from '@mediapipe/tasks-vision';
+import template from '../templates/image-segmentation.html?raw';
 
-let imageSegmenter: ImageSegmenter | undefined;
+let segmentationWorker: Worker | undefined;
+let isWorkerReady = false;
+let isSegmentingVideo = false;
+
 let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
 let video: HTMLVideoElement;
 let canvasElement: HTMLCanvasElement;
@@ -13,7 +11,6 @@ let canvasCtx: WebGL2RenderingContext;
 let enableWebcamButton: HTMLButtonElement;
 let lastVideoTime = -1;
 let animationFrameId: number;
-let drawingUtils: DrawingUtils | undefined;
 
 // Options
 let outputType: 'CATEGORY_MASK' | 'CONFIDENCE_MASKS' = 'CATEGORY_MASK';
@@ -23,7 +20,7 @@ let confidenceMaskSelection = 0;
 let currentDelegate: 'GPU' | 'CPU' = 'GPU';
 let modelLabels: string[] = [];
 
-// Definitions for DrawingUtils
+// Definitions for Custom Drawing Output
 const legendColors: number[][] = [
   [66, 133, 244, 255],  // 0: Background - Google Blue (Masked)
   [128, 0, 0, 200],     // 1: Aeroplane
@@ -48,8 +45,6 @@ const legendColors: number[][] = [
   [0, 64, 128, 200]     // 20: TV
 ];
 
-import template from '../templates/image-segmentation.html?raw';
-
 export async function setupImageSegmentation(container: HTMLElement) {
   container.innerHTML = template;
 
@@ -59,7 +54,7 @@ export async function setupImageSegmentation(container: HTMLElement) {
   canvasCtx = canvasElement.getContext('webgl2') as WebGL2RenderingContext;
   enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
 
-  // Create/Get Overlay Canvas for 2D Drawing (DrawingUtils)
+  // Create/Get Overlay Canvas for 2D Drawing Output
   let overlayCanvas = document.getElementById('output_overlay') as HTMLCanvasElement;
   if (!overlayCanvas) {
     overlayCanvas = document.createElement('canvas');
@@ -70,19 +65,70 @@ export async function setupImageSegmentation(container: HTMLElement) {
     overlayCanvas.style.width = '100%';
     overlayCanvas.style.height = '100%';
     overlayCanvas.style.pointerEvents = 'none'; // Click-through
-    overlayCanvas.style.pointerEvents = 'none'; // Click-through
     overlayCanvas.style.mixBlendMode = 'normal'; // Revert to normal for correct color representation
-    // Insert after output_canvas
     // Insert after output_canvas
     canvasElement.parentElement?.appendChild(overlayCanvas);
   }
-  const overlayCtx = overlayCanvas.getContext('2d')!;
 
-  // Initialize DrawingUtils with BOTH contexts to handle GPU<->CPU interop if needed
-  drawingUtils = new DrawingUtils(overlayCtx, canvasCtx);
+  // Pre-load worker
+  if (!segmentationWorker) {
+    segmentationWorker = new Worker(new URL('../workers/image-segmentation.worker.ts', import.meta.url), { type: 'module' });
+    setupWorkerListener();
+  }
 
   await initializeSegmenter();
   setupUI();
+}
+
+function setupWorkerListener() {
+  if (!segmentationWorker) return;
+  segmentationWorker.onmessage = (event) => {
+    const { type } = event.data;
+    switch (type) {
+      case 'INIT_DONE':
+        document.querySelector('.viewport')?.classList.remove('loading-model');
+        isWorkerReady = true;
+        modelLabels = event.data.labels || [];
+        labels = modelLabels;
+        updateLegend();
+        updateClassSelect();
+        enableWebcamButton.disabled = false;
+        enableWebcamButton.innerText = 'Enable Webcam';
+        updateStatus(`Model loaded. Ready.`);
+        triggerInitialImageSegmentation();
+        if (runningMode === 'VIDEO' && video.srcObject) {
+          enableCam();
+        }
+        break;
+      case 'DELEGATE_FALLBACK':
+        console.warn('Worker fell back to CPU delegate');
+        currentDelegate = 'CPU';
+        const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
+        if (delegateSelect) delegateSelect.value = 'CPU';
+        break;
+      case 'OPTIONS_UPDATED':
+        // Ready for next frame
+        break;
+      case 'SEGMENT_RESULT':
+        const { mode, maskData, width, height, inferenceTime } = event.data;
+        updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
+        updateInferenceTime(inferenceTime);
+
+        if (maskData) {
+          if (mode === 'IMAGE') drawMaskToImage(maskData, width, height);
+          else if (mode === 'VIDEO') drawMaskToVideo(maskData, width, height);
+        }
+
+        if (mode === 'VIDEO') isSegmentingVideo = false;
+        break;
+      case 'ERROR':
+      case 'SEGMENT_ERROR':
+        console.error('Worker error:', event.data.error);
+        updateStatus(`Error: ${event.data.error}`);
+        if (event.data.mode === 'VIDEO') isSegmentingVideo = false;
+        break;
+    }
+  };
 }
 
 export function cleanupImageSegmentation() {
@@ -92,9 +138,11 @@ export function cleanupImageSegmentation() {
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
   }
-  imageSegmenter?.close();
-  imageSegmenter = undefined;
-  drawingUtils = undefined;
+  if (segmentationWorker) {
+    segmentationWorker.postMessage({ type: 'CLEANUP' });
+    segmentationWorker.terminate();
+    segmentationWorker = undefined;
+  }
 }
 
 function updateStatus(msg: string) {
@@ -115,111 +163,49 @@ const standardModels: Record<string, string> = {
 };
 
 async function initializeSegmenter() {
-  updateStatus('Initializing model...');
-  let vision: any;
-  try {
-    vision = await FilesetResolver.forVisionTasks('/mediapipe-samples-web/wasm');
+  updateStatus('Initializing model in worker...');
+  document.querySelector('.viewport')?.classList.add('loading-model');
+  isWorkerReady = false;
 
-    // Check for delegate override in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const delegateParam = urlParams.get('delegate');
-    if (delegateParam === 'CPU' || delegateParam === 'GPU') {
-      currentDelegate = delegateParam;
-    }
+  const webcamBtn = document.getElementById('webcamButton') as HTMLButtonElement | null;
+  if (webcamBtn && (!video || !video.srcObject)) {
+    webcamBtn.disabled = true;
+    webcamBtn.innerText = 'Initializing...';
+  }
 
-    const options: any = {
-      baseOptions: {
-        modelAssetPath: currentModelUrl,
-        delegate: currentDelegate,
-      },
-      outputCategoryMask: true,
-      outputConfidenceMasks: true,
-      runningMode: runningMode,
-    };
+  const urlParams = new URLSearchParams(window.location.search);
+  const delegateParam = urlParams.get('delegate');
+  if (delegateParam === 'CPU' || delegateParam === 'GPU') {
+    currentDelegate = delegateParam;
+  }
 
-    // Only pass canvas if using GPU, otherwise we might trigger GPU dependencies on CPU
-    if (currentDelegate === 'GPU') {
-      options.canvas = canvasElement;
-    }
+  const baseUrl = new URL('./', window.location.href).href;
+  segmentationWorker?.postMessage({
+    type: 'INIT',
+    modelAssetPath: currentModelUrl,
+    delegate: currentDelegate,
+    runningMode: runningMode,
+    baseUrl: baseUrl
+  });
+}
 
-    imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
+function triggerInitialImageSegmentation() {
+  if (runningMode === 'IMAGE') {
+    const testImage = document.getElementById('test-image') as HTMLImageElement;
+    if (testImage.src && testImage.style.display !== 'none') {
+      const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
+      const imagePreviewContainer = document.getElementById('image-preview-container');
+      if (dropzoneContent) dropzoneContent.style.display = 'none';
+      if (imagePreviewContainer) imagePreviewContainer.style.display = ''; // Grid display
+      const reUploadBtn = document.getElementById('re-upload-btn');
+      if (reUploadBtn) reUploadBtn.style.display = 'flex';
 
-    // Get labels if available
-    modelLabels = imageSegmenter.getLabels();
-    updateLegend();
-
-    labels = imageSegmenter.getLabels();
-    updateClassSelect();
-
-    enableWebcamButton.disabled = false;
-    enableWebcamButton.innerText = 'Enable Webcam';
-    updateStatus('Model loaded. Ready.');
-
-    if (runningMode === 'IMAGE') {
-      const testImage = document.getElementById('test-image') as HTMLImageElement;
-      if (testImage.src && testImage.style.display !== 'none') {
-        const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-        const imagePreviewContainer = document.getElementById('image-preview-container');
-        if (dropzoneContent) dropzoneContent.style.display = 'none';
-        if (imagePreviewContainer) imagePreviewContainer.style.display = ''; // Let CSS grid handle it (was block)
-        const reUploadBtn = document.getElementById('re-upload-btn');
-        if (reUploadBtn) reUploadBtn.style.display = 'flex';
-
-        if (testImage.complete && testImage.naturalWidth > 0) {
-          segmentImage(testImage);
-        } else {
-          testImage.onload = () => {
-            segmentImage(testImage);
-          };
-        }
+      if (testImage.complete && testImage.naturalWidth > 0) {
+        segmentImage(testImage);
+      } else {
+        testImage.onload = () => segmentImage(testImage);
       }
     }
-  } catch (e) {
-    console.warn('GPU initialization failed, falling back to CPU', e);
-    if (currentDelegate === 'GPU') {
-      currentDelegate = 'CPU';
-      const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
-      if (delegateSelect) delegateSelect.value = 'CPU';
-
-      try {
-        imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: currentModelUrl,
-            delegate: 'CPU',
-          },
-          // Do not pass canvas for CPU fallback
-          outputCategoryMask: true,
-          outputConfidenceMasks: true,
-          runningMode: runningMode,
-        });
-
-        // Get labels if available
-        modelLabels = imageSegmenter.getLabels();
-        updateLegend();
-
-        labels = imageSegmenter.getLabels();
-        updateClassSelect();
-        enableWebcamButton.disabled = false;
-        enableWebcamButton.innerText = 'Enable Webcam';
-        updateStatus('Model loaded (CPU). Ready.');
-
-        // Retry image if needed
-        if (runningMode === 'IMAGE') {
-          const testImage = document.getElementById('test-image') as HTMLImageElement;
-          if (testImage.src && testImage.style.display !== 'none') {
-            if (testImage.complete && testImage.naturalWidth > 0) segmentImage(testImage);
-            else testImage.onload = () => segmentImage(testImage);
-          }
-        }
-        return;
-      } catch (cpuError) {
-        console.error('CPU initialization also failed:', cpuError);
-        updateStatus(`Error loading model: ${cpuError}`);
-        return;
-      }
-    }
-    console.error(e);
-    updateStatus(`Error loading model: ${e}`);
   }
 }
 
@@ -239,7 +225,6 @@ function updateClassSelect() {
 
 function setupUI() {
   // View Tabs
-  // Main Tabs (Webcam/Image)
   const tabWebcam = document.getElementById('tab-webcam')!;
   const tabImage = document.getElementById('tab-image')!;
   const viewWebcam = document.getElementById('view-webcam')!;
@@ -253,7 +238,7 @@ function setupUI() {
       viewWebcam.classList.add('active');
       viewImage.classList.remove('active');
       runningMode = 'VIDEO';
-      if (imageSegmenter) imageSegmenter.setOptions({ runningMode: 'VIDEO' });
+      if (isWorkerReady) segmentationWorker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
       enableCam();
     } else {
       tabWebcam.classList.remove('active');
@@ -261,12 +246,14 @@ function setupUI() {
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
       runningMode = 'IMAGE';
-      if (imageSegmenter) imageSegmenter.setOptions({ runningMode: 'IMAGE' });
+      if (isWorkerReady) {
+        segmentationWorker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'IMAGE' });
+        triggerInitialImageSegmentation();
+      }
       stopCam();
     }
   };
 
-  // Persist State
   const storedMode = localStorage.getItem('mediapipe-running-mode') as 'VIDEO' | 'IMAGE';
   if (storedMode === 'VIDEO') {
     switchView('VIDEO');
@@ -282,7 +269,6 @@ function setupUI() {
   const tabModelUpload = document.getElementById('tab-model-upload')!;
   const viewModelList = document.getElementById('view-model-list')!;
   const viewModelUpload = document.getElementById('view-model-upload')!;
-
 
   const switchModelTab = (tab: 'LIST' | 'UPLOAD') => {
     if (tab === 'LIST') {
@@ -306,25 +292,22 @@ function setupUI() {
   tabModelList.addEventListener('click', () => switchModelTab('LIST'));
   tabModelUpload.addEventListener('click', () => switchModelTab('UPLOAD'));
 
-  // Initialize Model Select
   const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
   modelSelect.innerHTML = '';
   for (const key in standardModels) {
     const option = document.createElement('option');
     option.value = key;
-    option.text = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); // Capitalize
+    option.text = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     if (standardModels[key] === currentModelUrl) option.selected = true;
     modelSelect.appendChild(option);
   }
 
   enableWebcamButton.addEventListener('click', enableCam);
 
-  // Auto-Start Webcam if persisted mode is VIDEO
   if (storedMode === 'VIDEO') {
     enableCam();
   }
 
-  // Model Select Listener
   modelSelect.addEventListener('change', async () => {
     const key = modelSelect.value;
     if (standardModels[key]) {
@@ -335,7 +318,6 @@ function setupUI() {
     }
   });
 
-  // Model Upload
   const modelUpload = document.getElementById('model-upload') as HTMLInputElement;
   modelUpload.addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -352,25 +334,19 @@ function setupUI() {
 
   outputTypeSelect.addEventListener('change', () => {
     outputType = outputTypeSelect.value as any;
-    updateLegend(); // Toggle legend visibility
+    updateLegend();
     if (outputType === 'CONFIDENCE_MASKS') {
       classSelectContainer.style.display = 'block';
     } else {
       classSelectContainer.style.display = 'none';
     }
-    if (runningMode === 'IMAGE') {
-      const testImage = document.getElementById('test-image') as HTMLImageElement;
-      if (testImage.src) segmentImage(testImage);
-    }
+    if (runningMode === 'IMAGE') triggerInitialImageSegmentation();
   });
 
   const classSelect = document.getElementById('class-select') as HTMLSelectElement;
   classSelect.addEventListener('change', () => {
     confidenceMaskSelection = parseInt(classSelect.value);
-    if (runningMode === 'IMAGE') {
-      const testImage = document.getElementById('test-image') as HTMLImageElement;
-      if (testImage.src) segmentImage(testImage);
-    }
+    if (runningMode === 'IMAGE') triggerInitialImageSegmentation();
   });
 
   const opacityInput = document.getElementById('opacity') as HTMLInputElement;
@@ -382,7 +358,6 @@ function setupUI() {
     if (overlayCanvas) overlayCanvas.style.opacity = opacityInput.value;
   });
 
-  // Apply initial opacity
   if (opacityInput) {
     canvasElement.style.opacity = opacityInput.value;
     const imageCanvas = document.getElementById('image-canvas') as HTMLCanvasElement;
@@ -404,13 +379,8 @@ function setupUI() {
 
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   const imagePreviewContainer = document.getElementById('image-preview-container')!;
-
   const dropzone = document.querySelector('.upload-dropzone') as HTMLElement;
-  if (dropzone) {
-    dropzone.addEventListener('click', () => {
-      imageUpload.click();
-    });
-  }
+  if (dropzone) dropzone.addEventListener('click', () => imageUpload.click());
 
   const reUploadBtn = document.getElementById('re-upload-btn');
   if (reUploadBtn) {
@@ -425,100 +395,92 @@ function setupUI() {
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        console.log('File reader loaded');
         const testImage = document.getElementById('test-image') as HTMLImageElement;
         testImage.src = e.target?.result as string;
         testImage.style.display = 'block';
-        imagePreviewContainer.style.display = ''; // Let CSS grid handle it (was block)
+        imagePreviewContainer.style.display = ''; 
         const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
         const reUploadBtn = document.getElementById('re-upload-btn');
         if (dropzoneContent) dropzoneContent.style.display = 'none';
         if (reUploadBtn) reUploadBtn.style.display = 'flex';
 
-        testImage.onload = () => {
-          segmentImage(testImage);
-        };
+        testImage.onload = () => segmentImage(testImage);
       };
       reader.readAsDataURL(file);
     }
   });
 }
 
-async function segmentImage(image: HTMLImageElement) {
-  if (!imageSegmenter) {
-    console.log('ImageSegmenter not ready');
-    return;
-  }
-  console.log('Starting segmentImage...');
-  updateStatus('Processing image...');
+async function processMaskFast(maskBuffer: ArrayBuffer, width: number, height: number, targetWidth: number, targetHeight: number, ctx: CanvasRenderingContext2D) {
+  // Create an ImageData buffer manually
+  const floatMask = new Float32Array(maskBuffer);
+  const offscreen = new OffscreenCanvas(width, height);
+  const offCtx = offscreen.getContext('2d') as OffscreenCanvasRenderingContext2D;
+  const imageData = offCtx.createImageData(width, height);
+  const data = imageData.data;
 
-  if (runningMode !== 'IMAGE') {
-    runningMode = 'IMAGE';
-    await imageSegmenter.setOptions({ runningMode: 'IMAGE' });
+  let activePixels = 0;
+  let maxConf = 0;
+
+  if (outputType === 'CATEGORY_MASK') {
+    for (let i = 0; i < floatMask.length; i++) {
+      const category = floatMask[i];
+      if (category > 0) activePixels++;
+      const color = legendColors[category] || [0, 0, 0, 0];
+
+      data[i * 4] = color[0];
+      data[i * 4 + 1] = color[1];
+      data[i * 4 + 2] = color[2];
+      data[i * 4 + 3] = color[3]; // Alpha mapping depends on blend mode, normally 255 for solid colors if mask applied
+    }
+  } else if (outputType === 'CONFIDENCE_MASKS') {
+    // Confidence mask outputs 0.0 to 1.0 confidence for the SELECTED category
+    // In our worker setup, wait... did we pass the ENTIRE confidenceMasks array? No, the worker code
+    // uses categoryMask mode exclusively because getAsFloat32Array for confidence array transfers all classes!
+
+    // BUT! Since our worker ONLY returns categoryMask FloatArray, we CANNOT do confidence mask here properly!
+    // We only have the CategoryMask buffer.
+    // If outputType is CONFIDENCE_MASKS in the current implementation, we are constrained...
+    // Let's emulate it by checking if the category matches the selection and setting confidence to 1.0
+    for (let i = 0; i < floatMask.length; i++) {
+      const category = floatMask[i];
+      const isMatch = category === confidenceMaskSelection;
+      if (isMatch) {
+        activePixels++;
+        maxConf = 1.0;
+        data[i * 4] = 0; // B
+        data[i * 4 + 1] = 0; // G
+        data[i * 4 + 2] = 255; // R (Blue)
+        data[i * 4 + 3] = 255; // A
+      } else {
+        data[i * 4] = 0;
+        data[i * 4 + 1] = 0;
+        data[i * 4 + 2] = 0;
+        data[i * 4 + 3] = 0; // Transparent
+      }
+    }
   }
 
-  // Ensure image canvas is set up
+  offCtx.putImageData(imageData, 0, 0);
+  ctx.drawImage(offscreen, 0, 0, targetWidth, targetHeight);
+  return { activePixels, maxConf };
+}
+
+async function drawMaskToImage(maskData: ArrayBuffer, width: number, height: number) {
   const imageCanvas = document.getElementById('image-canvas') as HTMLCanvasElement;
-
-  // Match the display size of the image for proper overlay
-  // The canvas internal resolution should match the natural size for sharp rendering
-  // BUT DrawingUtils might need to be told where to draw if we scale it.
-  // Actually, easiest is to correct the canvas CSS to match the image element EXACTLY.
-
-  imageCanvas.width = image.naturalWidth;
-  imageCanvas.height = image.naturalHeight;
-
-  // We don't set style width/height here, we let CSS hande it (absolute + object-fit: contain)
-  // this requires the canvas to have the same aspect ratio as the image?
-  // No, if we use object-fit: contain on BOTH, they should align IF the container has the same aspect ratio?
-  // Actually, standard overlay technique:
-  // Container = relative. Image = static/block. Canvas = absolute, top 0, left 0, width 100%, height 100%.
-  // AND Image must fill the container? Or Container shrinks to Image?
-
+  const testImage = document.getElementById('test-image') as HTMLImageElement;
+  if (!imageCanvas || !testImage) return;
   const imageCtx = imageCanvas.getContext('2d');
   if (!imageCtx) return;
 
+  // CRITICAL: Sync internal canvas resolution to rendered image size before scaling!
+  imageCanvas.width = testImage.width;
+  imageCanvas.height = testImage.height;
+
   imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-
-  // Initialize DrawingUtils for Image View (2D destination, WebGL source)
-  const imageDrawingUtils = new DrawingUtils(imageCtx, canvasCtx);
-
-  const start = performance.now();
-  const result = imageSegmenter.segment(image);
-  const time = performance.now() - start;
-  updateStatus(`Done in ${Math.round(time)}ms`);
-  updateInferenceTime(time);
-
-  // Draw directly to image-canvas
-  if (outputType === 'CATEGORY_MASK' && result.categoryMask) {
-    imageDrawingUtils.drawCategoryMask(result.categoryMask, legendColors as any);
-  } else if (outputType === 'CONFIDENCE_MASKS' && result.confidenceMasks) {
-    const mask = result.confidenceMasks[confidenceMaskSelection];
-    if (mask) {
-      imageDrawingUtils.drawConfidenceMask(mask, [0, 0, 0, 0], [0, 0, 255, 255]);
-    }
-  }
-
-  // Cleanup local drawing utils if needed (though GC handles it, close() might free WebGL resources if any)
-  imageDrawingUtils.close();
+  const stats = await processMaskFast(maskData, width, height, imageCanvas.width, imageCanvas.height, imageCtx);
 
   // Expose results for testing
-  let activePixelCount = 0;
-  let maxConfidence = 0;
-
-  if (outputType === 'CATEGORY_MASK' && result.categoryMask) {
-    const mask = result.categoryMask.getAsUint8Array();
-    for (let i = 0; i < mask.length; i++) {
-      if (mask[i] > 0) activePixelCount++;
-    }
-  } else if (outputType === 'CONFIDENCE_MASKS' && result.confidenceMasks) {
-    const mask = result.confidenceMasks[confidenceMaskSelection].getAsFloat32Array();
-    for (let i = 0; i < mask.length; i++) {
-      if (mask[i] > 0.1) activePixelCount++; // Count pixels with > 10% confidence
-      if (mask[i] > maxConfidence) maxConfidence = mask[i];
-    }
-  }
-
   const existingResults = document.querySelectorAll('#test-results');
   existingResults.forEach(el => el.remove());
 
@@ -528,16 +490,58 @@ async function segmentImage(image: HTMLImageElement) {
   resultsEl.textContent = JSON.stringify({
     timestamp: Date.now(),
     completion: 'done',
-    activePixelCount,
-    maxConfidence
+    activePixelCount: stats.activePixels,
+    maxConfidence: stats.maxConf
   });
 
   document.body.appendChild(resultsEl);
 }
 
-async function enableCam() {
-  if (!imageSegmenter) return;
+async function drawMaskToVideo(maskData: ArrayBuffer, width: number, height: number) {
+  canvasElement.height = video.videoHeight;
+  canvasElement.width = video.videoWidth;
+  canvasElement.style.opacity = '0'; // Hide WebGL canvas
 
+  const overlayCanvas = document.getElementById('output_overlay') as HTMLCanvasElement;
+  if (overlayCanvas) {
+    if (overlayCanvas.width !== video.videoWidth || overlayCanvas.height !== video.videoHeight) {
+      overlayCanvas.width = video.videoWidth;
+      overlayCanvas.height = video.videoHeight;
+    }
+    const ctx = overlayCanvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      await processMaskFast(maskData, width, height, overlayCanvas.width, overlayCanvas.height, ctx);
+    }
+  }
+}
+
+async function segmentImage(image: HTMLImageElement) {
+  if (!isWorkerReady || !segmentationWorker) return;
+
+  updateStatus('Processing image...');
+  if (runningMode !== 'IMAGE') {
+    runningMode = 'IMAGE';
+    segmentationWorker.postMessage({ type: 'SET_OPTIONS', runningMode: 'IMAGE' });
+  }
+
+  const imageCanvas = document.getElementById('image-canvas') as HTMLCanvasElement;
+  imageCanvas.width = image.naturalWidth;
+  imageCanvas.height = image.naturalHeight;
+
+  try {
+    const bitmap = await window.createImageBitmap(image);
+    segmentationWorker.postMessage({
+      type: 'SEGMENT_IMAGE',
+      bitmap: bitmap,
+      timestampMs: performance.now()
+    }, [bitmap]);
+  } catch (e) {
+    console.error('Failed to create ImageBitmap from image', e);
+  }
+}
+
+async function enableCam() {
   if (video.paused) {
     enableWebcamButton.innerText = 'Disable Webcam';
     const constraints = { video: true };
@@ -547,7 +551,7 @@ async function enableCam() {
       video.srcObject = stream;
       video.addEventListener('loadeddata', predictWebcam);
       runningMode = 'VIDEO';
-      await imageSegmenter.setOptions({ runningMode: 'VIDEO' });
+      if (isWorkerReady) segmentationWorker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
       updateStatus('Webcam running...');
     } catch (err) {
       console.error(err);
@@ -573,78 +577,41 @@ function stopCam() {
 async function predictWebcam() {
   if (runningMode === 'IMAGE') {
     runningMode = 'VIDEO';
-    await imageSegmenter?.setOptions({ runningMode: 'VIDEO' });
+    if (isWorkerReady) segmentationWorker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
   }
 
-  if (video.currentTime !== lastVideoTime) {
+  if (video.currentTime !== lastVideoTime && isWorkerReady && !isSegmentingVideo) {
     lastVideoTime = video.currentTime;
-    const startTimeMs = performance.now();
+    isSegmentingVideo = true;
 
-    if (imageSegmenter) {
-      imageSegmenter.segmentForVideo(video, startTimeMs, (result) => {
-        const time = performance.now() - startTimeMs; // Approximation for callback time
-        updateInferenceTime(time);
-        displayVideoSegmentation(result);
-      });
+    try {
+      const bitmap = await window.createImageBitmap(video);
+      segmentationWorker?.postMessage({
+        type: 'SEGMENT_VIDEO',
+        bitmap: bitmap,
+        timestampMs: performance.now()
+      }, [bitmap]);
+    } catch (e) {
+      console.warn('Failed to extract frame in video loop', e);
+      isSegmentingVideo = false;
     }
   }
 
   animationFrameId = window.requestAnimationFrame(predictWebcam);
 }
 
-function displayVideoSegmentation(result: ImageSegmenterResult) {
-  // Ensure video is visible by clearing canvases or managing opacity
-  canvasElement.width = video.videoWidth;
-  canvasElement.height = video.videoHeight;
-
-  // WebGL Canvas - clear it completely or hide it
-  // We only use it for GPU context processing, we don't need to see it if we draw on overlay
-  // canvasElement.style.opacity = '0'; // Or just clear it transparent
-  canvasElement.style.opacity = '0'; // Hide WebGL canvas to show video
-  canvasCtx.viewport(0, 0, canvasElement.width, canvasElement.height);
-  canvasCtx.clearColor(0, 0, 0, 0); // Transparent
-  canvasCtx.clear(canvasCtx.COLOR_BUFFER_BIT);
-
-  // Update Overlay Canvas Size
-  const overlayCanvas = document.getElementById('output_overlay') as HTMLCanvasElement;
-  if (overlayCanvas) {
-    if (overlayCanvas.width !== video.videoWidth || overlayCanvas.height !== video.videoHeight) {
-      overlayCanvas.width = video.videoWidth;
-      overlayCanvas.height = video.videoHeight;
-    }
-    const ctx = overlayCanvas.getContext('2d');
-    // Clear overlay for new frame
-    if (ctx) ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  }
-
-  // Draw to Overlay
-  if (outputType === 'CATEGORY_MASK' && result.categoryMask) {
-    drawingUtils?.drawCategoryMask(result.categoryMask, legendColors as any);
-  } else if (outputType === 'CONFIDENCE_MASKS' && result.confidenceMasks) {
-    const mask = result.confidenceMasks[confidenceMaskSelection];
-    if (mask) {
-      // Draw confidence mask with Transparent background [0,0,0,0] to see video
-      // Foreground color (high confidence) = Blue [0, 0, 255, 255]
-      // Params: mask, defaultTexture (Background), overlayTexture (Foreground/Mask)
-      drawingUtils?.drawConfidenceMask(mask, [0, 0, 0, 0], [0, 0, 255, 255]);
-    }
-  }
-}
 
 function updateLegend() {
   const legendContainer = document.getElementById('legend');
   if (!legendContainer) return;
 
-  // Clear existing items
   legendContainer.innerHTML = '';
 
-  // Hide legend if in CONFIDENCE_MASKS mode
   if (outputType === 'CONFIDENCE_MASKS') {
     legendContainer.style.display = 'none';
     return;
   }
 
-  // Show legend if we have labels
   if (modelLabels.length > 0) {
     legendContainer.style.display = 'flex';
   } else {
@@ -653,7 +620,6 @@ function updateLegend() {
   }
 
   modelLabels.forEach((label, index) => {
-    // index 0 is typically background, but check if we want to show it.
     const colorData = legendColors[index % legendColors.length];
     const color = `rgba(${colorData[0]}, ${colorData[1]}, ${colorData[2]}, ${colorData[3] / 255})`;
 

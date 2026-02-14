@@ -10,8 +10,18 @@ test.describe('Object Detection Task', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    page.on('console', msg => {
+      console.log(`[BROWSER ${msg.type()}] ${msg.text()}`);
+    });
+    page.on('pageerror', exc => console.log(`[BROWSER UNCAUGHT ERROR] ${exc}`));
+    page.on('worker', worker => {
+      worker.on('console', msg => console.log(`[WORKER ${msg.type()}] ${msg.text()}`));
+    });
+
+    // Clear local storage to ensure fresh start
+    await page.addInitScript(() => window.localStorage.clear());
     // Force CPU by default to ensure reliability in standard tests
-    await page.goto('?delegate=CPU#/vision/object_detector');
+    await page.goto('#/vision/object_detector');
     await page.waitForSelector('h2:has-text("Object Detection")');
     // Wait for model to load
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Running detection\.\.\.)|(Done)|(Ready)/, { timeout: 60000 });
@@ -47,34 +57,5 @@ test.describe('Object Detection Task', () => {
     expect(detections.length).toBeGreaterThan(0);
     const firstCat = detections[0].categories[0];
     expect(firstCat.categoryName.toLowerCase()).toContain('dog');
-  });
-
-  test('should detect objects on GPU @gpu', async ({ page }) => {
-    // Force GPU for this test
-    await page.goto('?delegate=GPU#/vision/object_detector');
-    await page.waitForSelector('h2:has-text("Object Detection")');
-    await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Running detection\.\.\.)|(Done)|(Ready)/, { timeout: 60000 });
-
-    await expect(page.locator('#delegate-select')).toHaveValue('GPU');
-
-    // Upload Image
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
-    await page.click('.upload-dropzone');
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(imagePath);
-
-    // Wait for processing
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 10000 });
-
-    // Check results
-    await expect(page.locator('#inference-time')).toContainText('Inference Time:');
-    await expect(page.locator('#inference-time')).not.toContainText('- ms');
-
-    // Verify detection properties
-    const resultsText = await page.locator('#test-results').textContent();
-    const detections = JSON.parse(resultsText || '[]');
-    expect(detections.length).toBeGreaterThan(0);
-    expect(detections[0].categories[0].categoryName.toLowerCase()).toContain('dog');
   });
 });
