@@ -14,6 +14,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: 'html',
+  snapshotPathTemplate: '{testDir}/__snapshots__/{arg}{ext}',
   use: {
     baseURL: 'http://localhost:5173/mediapipe-samples-web/',
     trace: 'on-first-retry',

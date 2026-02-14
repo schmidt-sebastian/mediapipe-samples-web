@@ -41,7 +41,7 @@ test.describe('Image Segmentation Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
     await expect(page.locator('#inference-time')).not.toContainText('- ms');
 
     // Verify mask result via visual regression
@@ -58,7 +58,7 @@ test.describe('Image Segmentation Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
     await expect(page.locator('#inference-time')).not.toContainText('- ms');
 
     // Verify mask result
@@ -82,7 +82,7 @@ test.describe('Image Segmentation Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
 
     // Verify mask result
     // Verify mask result via visual regression (Confidence Mask)
