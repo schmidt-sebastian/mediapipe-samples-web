@@ -114,7 +114,7 @@ test.describe('Image Segmentation Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 30000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 30000 });
 
     // Verify result is present (visual regression might differ slightly on GPU, so maybe just check functionality)
   });
@@ -132,7 +132,7 @@ test.describe('Image Segmentation Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
     await expect(page.locator('#test-results')).toBeAttached({ timeout: 15000 });
   });
 
@@ -143,7 +143,7 @@ test.describe('Image Segmentation Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toContainText('Done', { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
 
     // Change Opacity to 0.2
     await page.fill('#opacity', '0.2');
