@@ -41,12 +41,15 @@ export async function setupObjectDetection(container: HTMLElement) {
   await initializeDetector();
 }
 
+// @ts-ignore
 import ObjectDetectionWorker from '../workers/object-detection.worker.ts?worker';
 
 function initWorker() {
   if (!worker) {
     worker = new ObjectDetectionWorker();
+    if (worker) {
     worker.onmessage = handleWorkerMessage;
+  }
   }
 }
 
