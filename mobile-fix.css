@@ -1,0 +1,68 @@
+
+/* Mobile Layout - Appended for specificity */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sidebar { 
+    display: none !important; 
+  }
+
+  /* Mobile Header */
+  .mobile-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--border-color);
+    height: var(--header-height);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .mobile-task-select {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    font-size: 16px;
+    background-color: white;
+    flex-grow: 1;
+    margin-left: 10px;
+    max-width: 250px;
+  }
+
+  .main-content {
+    height: auto;
+    min-height: calc(100vh - var(--header-height));
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  /* Stack controls vertically on mobile */
+  .detect-container {
+    flex-direction: column;
+  }
+  
+  /* IMPORTANT: Ensure settings and viewer stack */
+  .task-container {
+    flex-direction: column !important;
+  }
+
+  .detect-container .sidebar-controls {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 20px;
+    position: static;
+    height: auto;
+    overflow-y: visible;
+  }
+
+  .preview-container {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4/3;
+  }
+}
