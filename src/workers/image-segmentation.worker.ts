@@ -2,6 +2,7 @@ import {
   ImageSegmenter,
   FilesetResolver,
   ImageSegmenterResult,
+  DrawingUtils
 } from '@mediapipe/tasks-vision';
 
 // @ts-ignore
@@ -15,6 +16,8 @@ if (typeof self.import === 'undefined') {
 self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
 let imageSegmenter: ImageSegmenter | undefined = undefined;
+let drawingUtils: DrawingUtils | undefined = undefined;
+let renderCanvas: OffscreenCanvas | undefined = undefined;
 let isInitializing = false;
 let currentOptions: any = {};
 let basePath = '/';
@@ -39,7 +42,7 @@ self.onmessage = async (event) => {
         self.postMessage({ type: 'OPTIONS_UPDATED' });
       }
     } else if (type === 'SEGMENT_IMAGE' || type === 'SEGMENT_VIDEO') {
-      const { bitmap, timestampMs } = event.data;
+      const { bitmap, timestampMs, colors } = event.data;
       if (!imageSegmenter) {
         console.warn('ImageSegmenter not initialized yet.');
         bitmap.close();
@@ -59,44 +62,42 @@ self.onmessage = async (event) => {
         const inferenceTime = performance.now() - startTimeMs;
         bitmap.close();
 
-        // Convert the mask (either WebGLTexture or Float32Array/Uint8Array depending on outputType)
-        // ImageSegmenter defaults to outputCategoryMask: true, outputConfidenceMasks: false
-        // Currently, it returns WebGLTexture if built with GPU delegate natively,
-        // but in worker we must ensure it transfers a raw buffer or ImageBitmap if possible!
-
-        // Let's rely on standard 'categoryMask' buffer approach for now
-        // since transferring WebGL textures across worker threads is not trivial unless using OffscreenCanvas
-
-        let maskData = null;
+        let maskBitmap: ImageBitmap | null = null;
         let width = 0;
         let height = 0;
 
-        // ImageSegmenter supports `MPMask` which has `getAsUint8Array` or `getAsFloat32Array`. 
-        // We need to transfer these buffers to avoid structured clone bottleneck!
-        if (result.categoryMask) {
-          // We extract the array view
-          const floatArray = result.categoryMask.getAsFloat32Array();
+        if (result.categoryMask && renderCanvas && drawingUtils && colors) {
           width = result.categoryMask.width;
           height = result.categoryMask.height;
 
-          // Copy the data so we can transfer the raw buffer
-          // getAsFloat32Array() returns a Float32Array backed by WASM heap.
-          // We must copy it into a purely local buffer to transfer it.
-          maskData = new Float32Array(floatArray).buffer;
+          // Resize offscreen canvas to match mask bounds natively
+          if (renderCanvas.width !== width || renderCanvas.height !== height) {
+            renderCanvas.width = width;
+            renderCanvas.height = height;
+          }
 
-          // Close the original mask to free WASM memory!
+          // Let the GPU bind the Texture and write directly onto our Canvas Buffer
+          drawingUtils.drawCategoryMask(
+            result.categoryMask,
+            colors,
+            [0, 0, 0, 0]
+          );
+
+          // Zero-copy extract the final Colored bitmap to jump the thread wall
+          maskBitmap = renderCanvas.transferToImageBitmap();
+
+          // Free WASM WebGL memory immediately
           result.categoryMask.close();
         }
 
-        // @ts-ignore
-        self.postMessage({
+        (self as any).postMessage({
           type: 'SEGMENT_RESULT',
           mode: requiredMode,
-          maskData: maskData,
+          maskBitmap: maskBitmap,
           width: width,
           height: height,
           inferenceTime: inferenceTime
-        }, maskData ? [maskData] : []);
+        }, maskBitmap ? [maskBitmap] : []);
       };
 
       try {
@@ -147,10 +148,10 @@ async function initSegmenter() {
 
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
 
-    // We MUST use `outputCategoryMask` for normal segmentation (Uint8/Float32 masks)
-    // GPU delegate can output WebGL textures, but we cannot pass them over postMessage directly
-    // unless we render them to an OffscreenCanvas and call `transferToImageBitmap()`.
-    // BUT! getAsFloat32Array() handles downloading the texture automatically in MediaPipe!
+    // Provide an Offscreen Canvas for DrawingUtils to inherently map the GPU texture without stalling
+    renderCanvas = new OffscreenCanvas(256, 256);
+    drawingUtils = new DrawingUtils(renderCanvas.getContext('webgl2') as WebGL2RenderingContext);
+
     try {
       imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
         baseOptions: {
@@ -160,6 +161,7 @@ async function initSegmenter() {
         outputCategoryMask: true,
         outputConfidenceMasks: false,
         runningMode: currentOptions.runningMode,
+        canvas: renderCanvas
       });
     } catch (finalError) {
       console.error('ImageSegmenter initialization failed:', finalError);
