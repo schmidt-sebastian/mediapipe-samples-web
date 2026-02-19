@@ -5,3 +5,10 @@ public/js
 public/wasm
 tests/assets/
 tests/resources/
+
+# Logs
+*.log
+
+# Temporary test scripts
+test-init.js
+test-worker.js

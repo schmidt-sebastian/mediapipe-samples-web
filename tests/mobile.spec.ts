@@ -12,7 +12,7 @@ test.describe('Mobile Layout & Navigation', () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
   test.beforeAll(() => {
-    imagePath = path.resolve(__dirname, 'assets', 'dog.jpg');
+    imagePath = path.resolve(__dirname, '..', 'public', 'dog.jpg');
   });
 
   test.beforeEach(async ({ page }) => {

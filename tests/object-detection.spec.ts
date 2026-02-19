@@ -9,7 +9,7 @@ test.describe('Object Detection Task', () => {
   let imagePath: string;
 
   test.beforeAll(() => {
-    imagePath = path.resolve(__dirname, 'assets', 'dog.jpg');
+    imagePath = path.resolve(__dirname, '..', 'public', 'dog.jpg');
   });
 
   test.beforeEach(async ({ page }) => {

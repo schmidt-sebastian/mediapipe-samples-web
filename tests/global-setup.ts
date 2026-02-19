@@ -41,10 +41,7 @@ async function downloadFile(fileName: string, url: string): Promise<string> {
 
 export default async function globalSetup() {
     const assets = [
-        {
-            name: 'dog.jpg',
-            url: 'https://storage.googleapis.com/mediapipe-assets/dog_fluffy.jpg'
-        },
+
         {
             name: 'efficientdet_lite0.tflite',
             url: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite'
