@@ -26,7 +26,7 @@ self.onmessage = async (event) => {
 
   // Simple queue/lock to prevent calling WASM inference while setOptions is yielding the thread
   while (isProcessing) {
-    await new Promise(resolve => setTimeout(result => resolve(true), 10));
+    await new Promise(resolve => setTimeout(() => resolve(true), 10));
   }
   isProcessing = true;
 
