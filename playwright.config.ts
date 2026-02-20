@@ -48,6 +48,7 @@ export default defineConfig({
           args: [
             '--headless=new',
             '--use-gl=angle',
+            '--use-angle=swiftshader',
             '--ignore-gpu-blocklist',
             '--use-fake-ui-for-media-stream',
             '--use-fake-device-for-media-stream'

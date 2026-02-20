@@ -166,7 +166,11 @@ async function initDetector() {
       console.error('Failed to manually load WASM loader:', e);
     }
 
-    const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    // const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    const vision = {
+      wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
+      wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
+    };
 
     // Manual fetch to get buffer and report progress
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
