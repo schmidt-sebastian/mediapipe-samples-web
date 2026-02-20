@@ -12,11 +12,27 @@ export default defineConfig({
           // 2. TARGET FOLDER: Copy the files INTO a 'wasm' folder
           src: 'node_modules/@mediapipe/tasks-vision/wasm/*',
           dest: 'wasm'
+        },
+        {
+          src: 'node_modules/@mediapipe/tasks-audio/wasm/*',
+          dest: 'wasm'
         }
       ]
     })
   ],
   worker: {
     format: 'iife'
+  },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
   }
 });

@@ -1,6 +1,8 @@
 export function renderMobileNav(container: HTMLElement) {
   container.innerHTML = `
-      <img src="https://chuoling.github.io/mediapipe/images/mediapipe_small.png" alt="MediaPipe Logo" style="height: 30px; margin-right: 10px;">
+      <div style="display: flex; align-items: center; margin-right: 10px;">
+        <span class="material-icons" style="color: #007f8b; font-size: 24px;">analytics</span>
+      </div>
       <select id="mobile-task-select" class="mobile-task-select">
         <option value="#/vision/object_detector">Object Detection</option>
         <option value="#/vision/image_segmenter">Image Segmentation</option>

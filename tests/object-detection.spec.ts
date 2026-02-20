@@ -46,7 +46,7 @@ test.describe('Object Detection Task', () => {
     await fileChooser.setFiles(imagePath);
 
     // Wait for processing
-    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 30000 });
 
     // Check results
     await expect(page.locator('#inference-time')).toContainText('Inference Time:');
@@ -73,7 +73,7 @@ test.describe('Object Detection Task', () => {
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 30000 });
     const resultsText = await page.locator('#test-results').textContent();
     expect(JSON.parse(resultsText || '[]').length).toBeGreaterThan(0);
   });

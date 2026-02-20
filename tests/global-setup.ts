@@ -49,6 +49,10 @@ export default async function globalSetup() {
         {
             name: 'deeplab_v3.tflite',
             url: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/deeplab_v3/float32/1/deeplab_v3.tflite'
+        },
+        {
+            name: 'yamnet.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/1/yamnet.tflite'
         }
     ];
 

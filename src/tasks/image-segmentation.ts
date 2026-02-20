@@ -465,8 +465,9 @@ async function drawMaskToImage(maskBitmap: ImageBitmap) {
   }
 
   // CRITICAL: Sync internal canvas resolution to rendered image size before scaling!
-  imageCanvas.width = testImage.width;
-  imageCanvas.height = testImage.height;
+  // Use natural dimensions to match the mask bitmap exactly
+  imageCanvas.width = testImage.naturalWidth;
+  imageCanvas.height = testImage.naturalHeight;
 
   imageCtx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
   imageCtx.drawImage(maskBitmap, 0, 0, imageCanvas.width, imageCanvas.height);

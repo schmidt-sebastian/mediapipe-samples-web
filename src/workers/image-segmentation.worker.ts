@@ -1,8 +1,7 @@
 import {
   ImageSegmenter,
   FilesetResolver,
-  ImageSegmenterResult,
-  DrawingUtils
+  ImageSegmenterResult
 } from '@mediapipe/tasks-vision';
 
 // @ts-ignore
@@ -16,7 +15,6 @@ if (typeof self.import === 'undefined') {
 self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
 let imageSegmenter: ImageSegmenter | undefined = undefined;
-let drawingUtils: DrawingUtils | undefined = undefined;
 let renderCanvas: OffscreenCanvas | undefined = undefined;
 let isInitializing = false;
 let currentOptions: any = {};
@@ -66,9 +64,8 @@ self.onmessage = async (event) => {
 
       const startTimeMs = performance.now();
 
-      const callback = (result: ImageSegmenterResult) => {
+      const callback = async (result: ImageSegmenterResult) => {
         try {
-          console.log('Worker callback fired!');
           const inferenceTime = performance.now() - startTimeMs;
           bitmap.close();
 
@@ -76,27 +73,39 @@ self.onmessage = async (event) => {
           let width = 0;
           let height = 0;
 
-          if (result.categoryMask && renderCanvas && drawingUtils && colors) {
+          if (result.categoryMask && colors) {
             width = result.categoryMask.width;
             height = result.categoryMask.height;
 
-            // Resize offscreen canvas to match mask bounds natively
-            if (renderCanvas.width !== width || renderCanvas.height !== height) {
-              renderCanvas.width = width;
-              renderCanvas.height = height;
+            // Recreate offscreen canvas ensures clean state and avoids artifacts from transferToImageBitmap
+            if (!renderCanvas || renderCanvas.width !== width || renderCanvas.height !== height) {
+              renderCanvas = new OffscreenCanvas(width, height);
             }
 
-            // Let the GPU bind the Texture and write directly onto our Canvas Buffer
-            drawingUtils.drawCategoryMask(
-              result.categoryMask,
-              colors,
-              [0, 0, 0, 0]
-            );
+            const ctx = renderCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+            if (ctx) {
+              const maskData = result.categoryMask.getAsUint8Array();
+              const imageData = ctx.createImageData(width, height);
+              const data = imageData.data;
 
-            // Zero-copy extract the final Colored bitmap to jump the thread wall
-            maskBitmap = renderCanvas.transferToImageBitmap();
+              for (let i = 0; i < maskData.length; i++) {
+                const categoryIndex = maskData[i];
+                const color = colors[categoryIndex] || [0, 0, 0, 0];
+                const offset = i * 4;
+                data[offset] = color[0];
+                data[offset + 1] = color[1];
+                data[offset + 2] = color[2];
+                data[offset + 3] = color[3];
+              }
+              ctx.putImageData(imageData, 0, 0);
 
-            // Free WASM WebGL memory immediately
+              // Use transferToImageBitmap for 2D as it's efficient and safe
+              maskBitmap = renderCanvas.transferToImageBitmap();
+            } else {
+              console.error('Failed to get 2D context');
+            }
+
+            // Free WASM memory
             result.categoryMask.close();
           }
 
@@ -165,8 +174,8 @@ async function initSegmenter() {
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
 
     // Provide an Offscreen Canvas for DrawingUtils to inherently map the GPU texture without stalling
-    renderCanvas = new OffscreenCanvas(256, 256);
-    drawingUtils = new DrawingUtils(renderCanvas.getContext('webgl2') as WebGL2RenderingContext);
+    // renderCanvas = new OffscreenCanvas(256, 256);
+    // drawingUtils = new DrawingUtils(renderCanvas.getContext('webgl2') as WebGL2RenderingContext);
 
     try {
       imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
@@ -176,8 +185,7 @@ async function initSegmenter() {
         },
         outputCategoryMask: true,
         outputConfidenceMasks: false,
-        runningMode: currentOptions.runningMode,
-        canvas: renderCanvas
+        runningMode: currentOptions.runningMode
       });
     } catch (finalError) {
       console.error('ImageSegmenter initialization failed:', finalError);

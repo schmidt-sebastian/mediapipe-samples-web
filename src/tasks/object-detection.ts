@@ -6,7 +6,8 @@ let video: HTMLVideoElement;
 let canvasElement: HTMLCanvasElement;
 let canvasCtx: CanvasRenderingContext2D;
 let enableWebcamButton: HTMLButtonElement;
-let lastVideoTime = -1;
+let lastVideoTimeSeconds = -1;
+let lastTimestampMs = -1;
 let animationFrameId: number;
 let isWorkerReady = false;
 
@@ -17,9 +18,9 @@ let maxResults = 3;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
 const models: Record<string, string> = {
-  'efficientdet_lite0': 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite',
-  'efficientdet_lite2': 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float32/1/efficientdet_lite2.tflite',
-  'ssd_mobilenet_v2': 'https://storage.googleapis.com/mediapipe-models/object_detector/ssd_mobilenet_v2/float32/1/ssd_mobilenet_v2.tflite'
+  'efficientdet_lite0': 'efficientdet_lite0.tflite',
+  'efficientdet_lite2': 'efficientdet_lite2.tflite',
+  'ssd_mobilenet_v2': 'ssd_mobilenet_v2.tflite'
 };
 
 import template from '../templates/object-detection.html?raw';
@@ -149,9 +150,14 @@ async function initializeDetector() {
   // Tell worker to init
   // @ts-ignore
   const baseUrl = import.meta.env.BASE_URL;
+  let modelPath = models[currentModel];
+  if (!modelPath.startsWith('http')) {
+    modelPath = new URL(modelPath, new URL(baseUrl, window.location.origin)).href;
+  }
+
   worker?.postMessage({
     type: 'INIT',
-    modelAssetPath: models[currentModel],
+    modelAssetPath: modelPath,
     delegate: currentDelegate,
     scoreThreshold: scoreThreshold,
     maxResults: maxResults,
@@ -490,8 +496,8 @@ async function predictWebcam() {
     return;
   }
 
-  if (video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
+  if (video.currentTime !== lastVideoTimeSeconds) {
+    lastVideoTimeSeconds = video.currentTime;
 
     // We send the current frame to the worker. 
     // The worker will request the next frame by telling us it's done via `DETECT_RESULT`
@@ -508,10 +514,15 @@ async function predictWebcam() {
         bitmap = await window.createImageBitmap(video);
       }
 
+      // Ensure timestamps are monotonic
+      const now = performance.now();
+      const timestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
+      lastTimestampMs = timestampMs;
+
       worker?.postMessage({
         type: 'DETECT_VIDEO',
         bitmap: bitmap,
-        timestampMs: performance.now()
+        timestampMs: timestampMs
       }, [bitmap]);
     } catch (e) {
       console.error("Failed to create ImageBitmap from video", e);

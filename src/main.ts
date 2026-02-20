@@ -1,6 +1,7 @@
 import './app_clean.css';
 import { setupObjectDetection, cleanupObjectDetection } from './tasks/object-detection';
 import { setupImageSegmentation, cleanupImageSegmentation } from './tasks/image-segmentation';
+import { setupAudioClassifier, cleanupAudioClassifier } from './tasks/audio-classifier';
 import { renderSidebar } from './ui/sidebar';
 import { renderMobileNav } from './ui/mobile-nav';
 
@@ -46,6 +47,7 @@ const mainContent = app.querySelector('.main-content') as HTMLElement;
 const routes = {
   '/vision/object_detector': { setup: setupObjectDetection, cleanup: cleanupObjectDetection, label: 'Object Detection' },
   '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
+  '/audio/audio_classifier': { setup: setupAudioClassifier, cleanup: cleanupAudioClassifier, label: 'Audio Classifier' },
 };
 
 let currentCleanup: (() => void) | undefined;

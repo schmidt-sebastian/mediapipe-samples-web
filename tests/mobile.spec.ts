@@ -90,16 +90,26 @@ test.describe('Mobile Layout & Navigation', () => {
 
     // Verify centering styles are applied
     // Verify centering
+    // Verify centering
+    const transform = await btn.evaluate(el => getComputedStyle(el).transform);
+    const parentBox = await btn.evaluate(el => el.parentElement?.getBoundingClientRect());
+    const btnBox = await btn.boundingBox();
+    console.log('Webcam button transform:', transform);
+    console.log('Parent box:', parentBox);
+    console.log('Button box:', btnBox);
+
     await expect(btn).toHaveCSS('position', 'absolute');
     await expect(btn).toHaveCSS('bottom', '30px');
 
     // Check horizontal centering via bounding box (more robust than computed left %)
-    const box = await btn.boundingBox();
+    const box = btnBox;
     if (box) {
       const viewport = page.viewportSize();
       if (viewport) {
         const centerX = box.x + box.width / 2;
         const viewportCenterX = viewport.width / 2;
+        console.log(`Debug Math: centerX=${centerX}, viewportCenterX=${viewportCenterX}, diff=${Math.abs(centerX - viewportCenterX)}`);
+        console.log(`Viewport:`, viewport);
         expect(Math.abs(centerX - viewportCenterX)).toBeLessThan(2);
       }
     }
