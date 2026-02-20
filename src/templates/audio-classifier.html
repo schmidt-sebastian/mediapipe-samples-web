@@ -1,0 +1,120 @@
+<div class="task-container">
+    <!-- Controls on Left -->
+    <div class="controls-panel">
+        <!-- Model Section -->
+        <div class="section-title">Model Selection</div>
+        <div class="tabs-container">
+            <button id="tab-model-list" class="tab-button active">
+                <span class="material-icons">grid_view</span> Standard
+            </button>
+            <button id="tab-model-upload" class="tab-button">
+                <span class="material-icons">upload</span> Upload
+            </button>
+        </div>
+
+        <div id="view-model-list" class="tab-content active">
+            <div class="select-wrapper">
+                <select id="model-select">
+                    <option value="yamnet" selected>Yamnet (AudioSet)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="view-model-upload" class="tab-content">
+            <label class="file-upload-btn">
+                Choose .tflite File
+                <input type="file" id="model-upload" accept=".tflite">
+            </label>
+            <div id="upload-status" class="status-text">No file chosen</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Settings Section -->
+        <div class="section-title">Settings</div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Max Results</span>
+                <span id="max-results-value" class="value-badge">5</span>
+            </div>
+            <input type="range" id="max-results" min="1" max="10" value="5" class="range-slider">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Score Threshold</span>
+                <span id="score-threshold-value" class="value-badge">0.02</span>
+            </div>
+            <input type="range" id="score-threshold" min="0" max="1" step="0.01" value="0.02" class="range-slider">
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Delegate</span>
+            </div>
+            <div class="select-wrapper">
+                <select id="delegate-select">
+                    <option value="GPU" selected>GPU</option>
+                    <option value="CPU">CPU</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Status Section -->
+        <div id="status-message" class="status-message">Ready</div>
+        <div id="inference-time" class="inference-time">Inference Time: - ms</div>
+    </div>
+
+    <!-- Output on Right -->
+    <div class="output-panel">
+        <div class="output-header">
+            <h2>Audio Classifier</h2>
+            <div class="view-tabs">
+                <button id="tab-microphone" class="view-tab active">Microphone</button>
+                <button id="tab-file" class="view-tab">Audio File</button>
+            </div>
+        </div>
+
+        <div class="viewport audio-viewport">
+            <!-- Microphone View -->
+            <div id="view-microphone" class="view-content active">
+                <div class="cam-container">
+                    <div class="audio-visualizer-container">
+                        <canvas id="waveform-canvas"></canvas>
+                    </div>
+                    <button id="recordButton" class="action-button" style="margin-top: 20px;">
+                        <span class="material-icons">mic</span> Start Recording
+                    </button>
+                </div>
+            </div>
+
+            <!-- File View -->
+            <div id="view-file" class="view-content">
+                <div class="upload-dropzone">
+                    <div class="dropzone-content">
+                        <span class="material-icons large-icon">audio_file</span>
+                        <p>Drag and drop or click to upload audio</p>
+                        <input type="file" id="audio-upload" accept="audio/*">
+                    </div>
+                    <div id="audio-preview-container" class="preview-container" style="display: none;">
+                        <audio id="audio-player" controls style="width: 100%; margin-bottom: 20px;"></audio>
+                        <button id="run-file-classification" class="action-button">
+                            <span class="material-icons">play_arrow</span> Classify Audio
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section for both views -->
+            <div class="results-container">
+                <h3>Classification Results</h3>
+                <div id="classification-results" class="classification-bars">
+                    <!-- Bars will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
