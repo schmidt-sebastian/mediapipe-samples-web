@@ -17,9 +17,10 @@ let scoreThreshold = 0.5;
 let maxResults = 3;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
-'efficientdet_lite0': 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite',
+const models: Record<string, string> = {
+  'efficientdet_lite0': 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite',
   'efficientdet_lite2': 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float32/1/efficientdet_lite2.tflite',
-    'ssd_mobilenet_v2': 'https://storage.googleapis.com/mediapipe-models/object_detector/ssd_mobilenet_v2/float32/1/ssd_mobilenet_v2.tflite'
+  'ssd_mobilenet_v2': 'https://storage.googleapis.com/mediapipe-models/object_detector/ssd_mobilenet_v2/float32/1/ssd_mobilenet_v2.tflite'
 };
 
 import template from '../templates/object-detection.html?raw';
