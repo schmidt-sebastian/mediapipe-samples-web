@@ -28,6 +28,16 @@ test.describe('Object Detection Task', () => {
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Running detection\.\.\.)|(Done)|(Ready)/, { timeout: 60000 });
   });
 
+  // Intercept network requests for models to serve locally
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/efficientdet_lite0.tflite', route => {
+      route.fulfill({ path: path.join(__dirname, 'assets', 'efficientdet_lite0.tflite') });
+    });
+    await page.route('**/efficientdet_lite2.tflite', route => {
+      route.fulfill({ path: path.join(__dirname, 'assets', 'efficientdet_lite2.tflite') });
+    });
+  });
+
   test('should load with default settings', async ({ page }) => {
     await expect(page.locator('#model-select')).toHaveValue('efficientdet_lite0');
     // Expect CPU because we forced it in beforeEach

@@ -26,6 +26,15 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#webcamButton')).toBeEnabled({ timeout: 120000 });
   });
 
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/deeplab_v3.tflite', route => {
+      route.fulfill({ path: path.join(__dirname, 'assets', 'deeplab_v3.tflite') });
+    });
+    await page.route('**/hair_segmenter.tflite', route => {
+      route.fulfill({ path: path.join(__dirname, 'assets', 'hair_segmenter.tflite') });
+    });
+  });
+
   test('should load with default settings', async ({ page }) => {
     await expect(page.locator('#model-select')).toHaveValue('deeplab_v3');
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');

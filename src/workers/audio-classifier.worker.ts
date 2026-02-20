@@ -100,12 +100,12 @@ async function initClassifier() {
       audioClassifier = undefined;
     }
 
-    const wasmPath = new URL(`${basePath}wasm/`, self.location.origin).href;
+    const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
     console.log(`Loading audio tasks from ${wasmPath}`);
 
     // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
     // We must manually fetch the WASM loader and eval it in the global scope.
-    const wasmLoaderUrl = `${wasmPath}audio_wasm_internal.js`;
+    const wasmLoaderUrl = `${wasmPath}/audio_wasm_internal.js`;
     try {
       const response = await fetch(wasmLoaderUrl);
       if (!response.ok) {
@@ -128,8 +128,8 @@ async function initClassifier() {
     } else {
       console.warn('FilesetResolver.forAudioTasks missing, constructing manually');
       audioFileset = {
-        wasmLoaderPath: `${wasmPath}audio_wasm_internal.js`,
-        wasmBinaryPath: `${wasmPath}audio_wasm_internal.wasm`
+        wasmLoaderPath: `${wasmPath}/audio_wasm_internal.js`,
+        wasmBinaryPath: `${wasmPath}/audio_wasm_internal.wasm`
       };
     }
 

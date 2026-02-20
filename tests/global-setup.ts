@@ -47,8 +47,16 @@ export default async function globalSetup() {
             url: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float32/1/efficientdet_lite0.tflite'
         },
         {
+            name: 'efficientdet_lite2.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float32/1/efficientdet_lite2.tflite'
+        },
+        {
             name: 'deeplab_v3.tflite',
             url: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/deeplab_v3/float32/1/deeplab_v3.tflite'
+        },
+        {
+            name: 'hair_segmenter.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/hair_segmenter/float32/1/hair_segmenter.tflite'
         },
         {
             name: 'yamnet.tflite',
