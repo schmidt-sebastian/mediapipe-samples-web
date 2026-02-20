@@ -1,6 +1,7 @@
 export function renderSidebar(container: HTMLElement) {
   container.innerHTML = `
     <div class="sidebar-header">
+      <button class="menu-toggle material-icons" style="margin-right: 12px; color: var(--text-secondary); background: none; border: none; font-size: 24px; cursor: pointer;">menu_open</button>
       <div class="sidebar-logo-text">
         <span class="material-icons" style="color: var(--primary); font-size: 28px;">analytics</span>
         <span>MediaPipe Tasks</span>

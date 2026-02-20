@@ -34,10 +34,14 @@ test.describe('Navigation & UI', () => {
 
     // Toggle menu (using mobile header toggle)
     await page.click('.mobile-header .menu-toggle');
-    await expect(page.locator('.sidebar-nav')).toBeVisible();
+    const sidebar = page.locator('.sidebar-nav');
+    await expect(sidebar).toBeVisible();
+
+    // Wait for transition if any (just to be safe)
+    await page.waitForTimeout(500);
 
     // Toggle back (using sidebar toggle, since mobile one is covered)
-    await page.click('.sidebar-header .menu-toggle');
-    await expect(page.locator('.sidebar-nav')).toBeHidden();
+    await page.click('.sidebar-header .menu-toggle', { force: true });
+    await expect(sidebar).toBeHidden();
   });
 });

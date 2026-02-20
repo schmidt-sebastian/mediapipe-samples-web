@@ -16,7 +16,7 @@ export default defineConfig({
   reporter: 'html',
   snapshotPathTemplate: '{testDir}/__snapshots__/{arg}{ext}',
   use: {
-    baseURL: 'http://localhost:5173/mediapipe-samples-web/',
+    baseURL: 'http://localhost:5174/mediapipe-samples-web/',
     trace: 'on-first-retry',
   },
   projects: [
@@ -58,7 +58,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:5173/mediapipe-samples-web/',
+    url: 'http://localhost:5174/mediapipe-samples-web/',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },
