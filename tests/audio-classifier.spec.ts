@@ -141,4 +141,17 @@ test.describe('Audio Classifier Task', () => {
     const select = page.locator('#mobile-task-select');
     await expect(select).toHaveValue('#/audio/audio_classifier');
   });
+
+  test('should support drag and drop for audio upload', async ({ page }) => {
+    // Switch to File tab
+    await page.click('#tab-file');
+
+    const dropzone = page.locator('.upload-dropzone');
+    await expect(dropzone).toBeVisible();
+
+    // Simulate dragover to check styling
+    await dropzone.dispatchEvent('dragover');
+    // Check for the primary color border
+    await expect(dropzone).toHaveCSS('border-color', 'rgb(0, 127, 139)');
+  });
 });

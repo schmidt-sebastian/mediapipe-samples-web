@@ -754,10 +754,16 @@ video {
 }
 
 /* Fix hover transform to be consistent */
+/* Fix hover transform for generic buttons */
 .action-button:hover {
   background: var(--primary-hover);
+  transform: scale(1.05);
+    /* Only scale by default */
+  }
+  
+  /* Fix hover transform for absolute centered buttons */
+  .cam-container .action-button:hover {
   transform: translateX(-50%) scale(1.05);
-  /* This works if both are absolute centered */
 }
 /* Loading Overlay */
 .viewport.loading-model::after {

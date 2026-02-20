@@ -24,12 +24,15 @@ export default defineConfig({
     format: 'iife'
   },
   server: {
+    port: 5174,
+    strictPort: true,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp'
     }
   },
   preview: {
+    port: 5174,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp'

@@ -201,9 +201,38 @@ function setupUI() {
       if ((e.target as HTMLElement).closest('audio') || (e.target as HTMLElement).closest('button')) return;
       audioUpload.click();
     });
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = 'var(--primary)';
+      dropzone.style.backgroundColor = '#e3f2fd';
+    });
+
+    dropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = '#ccc'; // Reset to default (verify variable usage if strict)
+      dropzone.style.backgroundColor = '#f8f9fa';
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = '#ccc';
+      dropzone.style.backgroundColor = '#f8f9fa';
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        handleFileSelect(files[0]);
+      }
+    });
   }
 
-  audioUpload.addEventListener('change', handleFileUpload);
+  audioUpload.addEventListener('change', (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) handleFileSelect(file);
+  });
 
   // Sliders
   const maxResultsInput = document.getElementById('max-results') as HTMLInputElement;
@@ -324,10 +353,7 @@ function clearClassificationResult() {
   }
 }
 
-function handleFileUpload(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-
+function handleFileSelect(file: File) {
   const player = document.getElementById('audio-player') as HTMLAudioElement;
   const previewContainer = document.getElementById('audio-preview-container')!;
   const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
