@@ -151,6 +151,40 @@ self.onmessage = async (event) => {
   }
 };
 
+async function loadModel(path: string) {
+  const response = await fetch(path);
+  const reader = response.body?.getReader();
+  const contentLength = +response.headers.get('Content-Length')!;
+
+  if (!reader) {
+    return await response.arrayBuffer();
+  }
+
+  let receivedLength = 0;
+  const chunks = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedLength += value.length;
+    self.postMessage({
+      type: 'LOAD_PROGRESS',
+      loaded: receivedLength,
+      total: contentLength
+    });
+  }
+
+  const chunksAll = new Uint8Array(receivedLength);
+  let position = 0;
+  for (let chunk of chunks) {
+    chunksAll.set(chunk, position);
+    position += chunk.length;
+  }
+
+  return chunksAll.buffer;
+}
+
 async function initSegmenter() {
   if (isInitializing) return;
   isInitializing = true;
@@ -163,50 +197,56 @@ async function initSegmenter() {
 
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
 
+    // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
     const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-    const response = await fetch(wasmLoaderUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(wasmLoaderUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+      }
+      const loaderCode = await response.text();
+      (0, eval)(loaderCode);
+    } catch (e) {
+      console.error('Failed to manually load WASM loader:', e);
     }
-    const loaderCode = await response.text();
-    (0, eval)(loaderCode);
 
-    const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    // const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    const vision = {
+      wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
+      wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
+    };
 
-    // Provide an Offscreen Canvas for DrawingUtils to inherently map the GPU texture without stalling
-    // renderCanvas = new OffscreenCanvas(256, 256);
-    // drawingUtils = new DrawingUtils(renderCanvas.getContext('webgl2') as WebGL2RenderingContext);
+    // Manually fetch model to report progress
+    const modelBuffer = await loadModel(currentOptions.modelAssetPath);
+
+    // Override options to use buffer
+    const options = {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate: currentOptions.delegate,
+      },
+      outputCategoryMask: true,
+      outputConfidenceMasks: false,
+      runningMode: currentOptions.runningMode
+    };
 
     try {
-      imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: currentOptions.modelAssetPath,
-          delegate: currentOptions.delegate,
-        },
-        outputCategoryMask: true,
-        outputConfidenceMasks: false,
-        runningMode: currentOptions.runningMode
-      });
-    } catch (finalError) {
-      console.error('ImageSegmenter initialization failed:', finalError);
+      imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
+    } catch (error) {
+      // Fallback to CPU if GPU fails
+      console.warn('GPU init failed, falling back to CPU', error);
       if (currentOptions.delegate === 'GPU') {
-        currentOptions.delegate = 'CPU';
         self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-
-        const vision = await FilesetResolver.forVisionTasks(wasmPath);
-        imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: currentOptions.modelAssetPath,
-            delegate: 'CPU',
-          },
-          outputCategoryMask: true,
-          outputConfidenceMasks: false,
-          runningMode: currentOptions.runningMode,
-        });
+        options.baseOptions.delegate = 'CPU';
+        imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
       } else {
-        throw finalError;
+        throw error;
       }
     }
+
+  } catch (error: any) {
+    console.error("Image Segmentation Worker Init Error:", error);
+    throw error;
   } finally {
     isInitializing = false;
   }

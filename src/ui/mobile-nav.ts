@@ -6,6 +6,7 @@ export function renderMobileNav(container: HTMLElement) {
       <select id="mobile-task-select" class="mobile-task-select">
         <option value="#/vision/object_detector">Object Detection</option>
         <option value="#/vision/image_segmenter">Image Segmentation</option>
+        <option value="#/audio/audio_classifier">Audio Classifier</option>
       </select>
   `;
 
@@ -18,6 +19,8 @@ export function renderMobileNav(container: HTMLElement) {
     // For now, exact match or default
     if (hash.includes('image_segmenter')) {
       select.value = '#/vision/image_segmenter';
+    } else if (hash.includes('audio_classifier')) {
+      select.value = '#/audio/audio_classifier';
     } else {
       select.value = '#/vision/object_detector';
     }

@@ -87,6 +87,9 @@ function setupWorkerListener() {
     switch (type) {
       case 'INIT_DONE':
         document.querySelector('.viewport')?.classList.remove('loading-model');
+        const progressContainer = document.querySelector('.progress-container') as HTMLElement;
+        if (progressContainer) progressContainer.style.display = 'none';
+
         isWorkerReady = true;
         modelLabels = event.data.labels || [];
         labels = modelLabels;
@@ -114,6 +117,16 @@ function setupWorkerListener() {
         if (runningMode === 'VIDEO' && video.srcObject) {
           enableCam();
         }
+        break;
+      case 'LOAD_PROGRESS':
+        const { loaded, total } = event.data;
+        const percent = Math.round((loaded / total) * 100);
+        const progressBar = document.querySelector('.progress-bar') as HTMLElement;
+        const progressText = document.querySelector('.progress-text') as HTMLElement;
+        const pContainer = document.querySelector('.progress-container') as HTMLElement;
+        if (pContainer) pContainer.style.display = 'block';
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        if (progressText) progressText.innerText = `Loading Model... ${percent}%`;
         break;
       case 'DELEGATE_FALLBACK':
         console.warn('Worker fell back to CPU delegate');

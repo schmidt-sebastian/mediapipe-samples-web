@@ -90,6 +90,40 @@ self.onmessage = async (event) => {
   }
 };
 
+async function loadModel(path: string) {
+  const response = await fetch(path);
+  const reader = response.body?.getReader();
+  const contentLength = +response.headers.get('Content-Length')!;
+
+  if (!reader) {
+    return await response.arrayBuffer();
+  }
+
+  let receivedLength = 0;
+  const chunks = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedLength += value.length;
+    self.postMessage({
+      type: 'LOAD_PROGRESS',
+      loaded: receivedLength,
+      total: contentLength
+    });
+  }
+
+  const chunksAll = new Uint8Array(receivedLength);
+  let position = 0;
+  for (let chunk of chunks) {
+    chunksAll.set(chunk, position);
+    position += chunk.length;
+  }
+
+  return chunksAll.buffer;
+}
+
 async function initClassifier() {
   if (isInitializing) return;
   isInitializing = true;
@@ -103,6 +137,9 @@ async function initClassifier() {
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
     console.log(`Loading audio tasks from ${wasmPath}`);
 
+    // Fetch model manually for progress
+    const modelBuffer = await loadModel(currentOptions.modelAssetPath);
+
     // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
     // We must manually fetch the WASM loader and eval it in the global scope.
     const wasmLoaderUrl = `${wasmPath}/audio_wasm_internal.js`;
@@ -112,7 +149,6 @@ async function initClassifier() {
         throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
       }
       const loaderCode = await response.text();
-      // Use indirect eval to ensure global scope execution
       (0, eval)(loaderCode);
       console.log('Manually loaded audio_wasm_internal.js');
     } catch (e) {
@@ -133,11 +169,9 @@ async function initClassifier() {
       };
     }
 
-    // console.log('Audio Fileset:', audioFileset);
-
     audioClassifier = await AudioClassifier.createFromOptions(audioFileset, {
       baseOptions: {
-        modelAssetPath: currentOptions.modelAssetPath,
+        modelAssetBuffer: new Uint8Array(modelBuffer),
         delegate: currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
       },
       maxResults: currentOptions.maxResults,

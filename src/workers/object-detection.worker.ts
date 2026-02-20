@@ -117,17 +117,55 @@ async function initDetector() {
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
 
     // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
-    // We must manually fetch the WASM loader and eval it in the global scope.
     const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
     const response = await fetch(wasmLoaderUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
     }
     const loaderCode = await response.text();
-    // Use indirect eval to ensure global scope execution
     (0, eval)(loaderCode);
 
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
+
+    // Manual fetch for progress
+    const modelUrl = currentOptions.modelAssetPath;
+    let finalModelPath = modelUrl;
+
+    // If it's a remote URL (not a blob), fetch it manually to track progress
+    if (modelUrl && !modelUrl.startsWith('blob:')) {
+      self.postMessage({ type: 'LOAD_PROGRESS', progress: 0.01 }); // Start
+      const modelResponse = await fetch(modelUrl);
+      if (!modelResponse.ok) throw new Error(`Failed to fetch model: ${modelResponse.statusText}`);
+
+      const contentLength = modelResponse.headers.get('content-length');
+      const total = contentLength ? parseInt(contentLength, 10) : 0;
+      let loaded = 0;
+
+      if (modelResponse.body && total > 0) {
+        const reader = modelResponse.body.getReader();
+        const chunks = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          loaded += value.length;
+          // Report progress
+          self.postMessage({
+            type: 'LOAD_PROGRESS',
+            progress: loaded / total
+          });
+        }
+
+        const blob = new Blob(chunks);
+        finalModelPath = URL.createObjectURL(blob);
+      } else {
+        // Fallback if no content-length or body
+        const blob = await modelResponse.blob();
+        finalModelPath = URL.createObjectURL(blob);
+        self.postMessage({ type: 'LOAD_PROGRESS', progress: 1.0 });
+      }
+    }
 
     if (currentOptions.delegate === 'GPU') {
       console.warn('[Worker] GPU Delegate requested, but GPU delegate may be unstable in Web Worker depending on browser. Falling back to CPU if it crashes.');
@@ -136,7 +174,7 @@ async function initDetector() {
     try {
       objectDetector = await ObjectDetector.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: currentOptions.modelAssetPath,
+          modelAssetPath: finalModelPath,
           delegate: currentOptions.delegate,
         },
         scoreThreshold: currentOptions.scoreThreshold,

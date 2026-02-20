@@ -58,11 +58,35 @@ function handleWorkerMessage(event: MessageEvent) {
   const { type } = event.data;
 
   switch (type) {
+    case 'LOAD_PROGRESS':
+      const { progress } = event.data;
+      const progressContainer = document.getElementById('model-loading-progress');
+      const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
+      const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
+
+      if (progressContainer && progressBar && progressText) {
+        progressContainer.style.display = 'block';
+        const percent = Math.round(progress * 100);
+        progressBar.style.width = `${percent}%`;
+        progressText.innerText = `Loading Model... ${percent}%`;
+
+        if (progress >= 1) {
+          setTimeout(() => {
+            progressContainer.style.display = 'none';
+          }, 500);
+        }
+      }
+      break;
+
     case 'INIT_DONE':
       document.querySelector('.viewport')?.classList.remove('loading-model');
       isWorkerReady = true;
       enableWebcamButton.disabled = false;
       enableWebcamButton.innerText = 'Enable Webcam';
+
+      // Hide progress
+      const pContainer = document.getElementById('model-loading-progress');
+      if (pContainer) pContainer.style.display = 'none';
 
       if (runningMode === 'VIDEO') {
         if (video.srcObject) {

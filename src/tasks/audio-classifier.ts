@@ -55,12 +55,14 @@ export async function setupAudioClassifier(container: HTMLElement) {
 function initWorker() {
   if (!worker) {
     worker = new AudioClassifierWorker();
-    worker.onmessage = handleWorkerMessage;
-    worker.onerror = (e) => {
-      const msg = e instanceof ErrorEvent ? e.message : 'Unknown Worker Error';
-      console.error(`Worker script error: ${msg}`, e);
-      updateStatus(`Worker Error: ${msg}`);
-    };
+    if (worker) {
+      worker.onmessage = handleWorkerMessage;
+      worker.onerror = (e) => {
+        const msg = e instanceof ErrorEvent ? e.message : 'Unknown Worker Error';
+        console.error(`Worker script error: ${msg}`, e);
+        updateStatus(`Worker Error: ${msg}`);
+      };
+    }
   }
 }
 
@@ -113,10 +115,24 @@ function handleWorkerMessage(event: MessageEvent) {
   switch (type) {
     case 'INIT_DONE':
       document.querySelector('.viewport')?.classList.remove('loading-model');
+      const progressContainer = document.querySelector('.progress-container') as HTMLElement;
+      if (progressContainer) progressContainer.style.display = 'none';
+
       isWorkerReady = true;
       updateStatus('Ready');
       const recBtn = document.getElementById('recordButton') as HTMLButtonElement;
       if (recBtn) recBtn.disabled = false;
+      break;
+
+    case 'LOAD_PROGRESS':
+      const { loaded, total } = event.data;
+      const percent = Math.round((loaded / total) * 100);
+      const progressBar = document.querySelector('.progress-bar') as HTMLElement;
+      const progressText = document.querySelector('.progress-text') as HTMLElement;
+      const pContainer = document.querySelector('.progress-container') as HTMLElement;
+      if (pContainer) pContainer.style.display = 'block';
+      if (progressBar) progressBar.style.width = `${percent}%`;
+      if (progressText) progressText.innerText = `Loading Model... ${percent}%`;
       break;
 
     case 'CLASSIFY_RESULT':
@@ -156,9 +172,7 @@ function setupUI() {
       runningMode = 'AUDIO_CLIPS';
       stopRecording();
     }
-    // Re-init? Or assume worker handles mode switch via SET_OPTIONS if needed?
-    // AudioClassifier usually just takes data.
-    // But options might have runningMode.
+    clearClassificationResult();
   };
 
   tabMic.addEventListener('click', () => switchView('MIC'));
@@ -295,6 +309,19 @@ function stopRecording() {
   }
   isRecording = false;
   updateStatus('Ready');
+  clearClassificationResult();
+}
+
+function clearClassificationResult() {
+  const container = document.getElementById('classification-results');
+  if (container) {
+    container.innerHTML = '';
+  }
+  const resultsContainer = document.querySelector('.audio-viewport .results-container') as HTMLElement;
+  if (resultsContainer) {
+    resultsContainer.classList.remove('active');
+    resultsContainer.style.display = 'none';
+  }
 }
 
 function handleFileUpload(e: Event) {
@@ -307,6 +334,9 @@ function handleFileUpload(e: Event) {
 
   player.src = URL.createObjectURL(file);
   previewContainer.style.display = 'flex';
+  previewContainer.style.flexDirection = 'column';
+  previewContainer.style.alignItems = 'center';
+  previewContainer.style.justifyContent = 'center';
   dropzoneContent.style.display = 'none';
   // Set up classification button
   const runBtn = document.getElementById('run-file-classification') as HTMLButtonElement;
@@ -388,7 +418,7 @@ function visualizeWaveform(newData: Float32Array) {
   }
 
   // Clear with light background
-  canvasCtx.fillStyle = '#e0f7fa'; // Light Cyan
+  canvasCtx.fillStyle = '#f8f9fa'; // Neutral gray
   canvasCtx.fillRect(0, 0, width, height);
 
   canvasCtx.lineWidth = 2;
@@ -441,6 +471,12 @@ function displayClassificationResults(results: AudioClassifierResult[]) {
 
   const container = document.getElementById('classification-results');
   if (!container) return;
+
+  const resultsContainer = document.querySelector('.audio-viewport .results-container') as HTMLElement;
+  if (resultsContainer) {
+    resultsContainer.classList.add('active');
+    resultsContainer.style.display = 'block';
+  }
 
   container.innerHTML = '';
 

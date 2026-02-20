@@ -18,7 +18,10 @@
 * {
   box-sizing: border-box;
 }
-
+  
+                                .audio-viewport .results-container.active {
+                                  display: block;
+                                }
 html {
   height: 100%;
 }
@@ -155,10 +158,11 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: black;
+  background: transparent;
   /* Optional: to see it */
   overflow: hidden;
 }
+
 .section-title {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -437,12 +441,15 @@ select:focus {
 .audio-visualizer-container {
   width: 100%;
   height: 120px;
-  background: #e0f7fa;
-  /* Light cyan to match canvas */
+  background: #f8f9fa;
+    /* Neutral background */
   border-radius: var(--radius-sm);
   overflow: hidden;
   margin-top: 20px;
   position: relative;
+  border: 1px solid var(--border-color);
+    background: #f8f9fa;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 #waveform-canvas {
@@ -461,7 +468,8 @@ select:focus {
   place-items: center;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: black;
+  background: transparent;
+    /* Removed black background */
   margin-bottom: 1rem;
 }
 
@@ -540,6 +548,19 @@ video {
   display: flex;
   /* Ensure it behaves as flex container */
 }
+/* Audio Viewport Layout Fixes */
+.audio-viewport .cam-container {
+  background: transparent;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+}
+
+.audio-viewport .cam-container .action-button:hover {
+  transform: scale(1.05);
+  /* Override the global hover which adds translateX */
+}
 .action-button:hover {
   background: var(--primary-hover);
   transform: scale(1.05);
@@ -570,6 +591,52 @@ video {
   margin-bottom: 1rem;
 }
 
+.upload-dropzone {
+  width: 100%;
+  max-width: 500px;
+  height: 300px;
+  border: 2px dashed #ccc;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f8f9fa;
+  margin: 0 auto;
+  /* Center horizontal */
+}
+
+.upload-dropzone:hover {
+  border-color: var(--primary);
+  background: #e3f2fd;
+}
+
+.dropzone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  padding: 20px;
+}
+
+.large-icon {
+  font-size: 64px;
+  color: #aaa;
+}
+
+.upload-dropzone input[type="file"] {
+  display: none;
+}
+
+.preview-container audio {
+  width: 100%;
+  outline: none;
+  border-radius: 30px;
+  /* Rounded player */
+}
 .preview-container img {
   max-width: 100%;
   max-height: 500px;
@@ -725,12 +792,30 @@ video {
   .sidebar {
     display: none !important;
   }
-                                                                .sidebar.open {
-                                                                  display: flex !important;
-                                                                  position: fixed;
-                                                                  height: 100%;
-                                                                  z-index: 1000;
-                                                                }
+                .controls-panel {
+                  width: 100%;
+                  height: auto;
+                  border-right: none;
+                  border-bottom: 1px solid var(--border-color);
+                  padding: 16px;
+                }
+        
+                .output-panel {
+                  overflow-y: visible;
+                  /* Allow page scroll */
+                }
+        
+                .app-container {
+                  height: auto;
+                  overflow-y: auto;
+                }
+                .sidebar.open {
+                  display: flex !important;
+                  position: fixed;
+                  height: 100%;
+                  z-index: 1000;
+                }
+
 
   .mobile-header {
     display: flex !important;
@@ -809,7 +894,33 @@ video {
 /* Ensure results don't jump around */
 .audio-viewport .results-container {
   width: 100%;
-  max-width: 500px;
+  max-width: 600px;
   /* Match cam-container width roughly */
   margin-top: 20px;
+  padding: 0 10px;
+    box-sizing: border-box;
+  }
+  
+  /* Progress Bar */
+  .progress-container {
+    width: 100%;
+    margin-top: 12px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  
+  .progress-bar {
+    width: 0%;
+    height: 4px;
+    background: var(--primary);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+  
+  .progress-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 4px;
 }
