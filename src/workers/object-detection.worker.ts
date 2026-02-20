@@ -22,6 +22,7 @@ let basePath = '/';
 let isProcessing = false;
 
 self.onmessage = async (event) => {
+  console.log("[Worker] Object Detection Worker v2.0 (Flatbuffer Fix)");
   const { type } = event.data;
 
   // Simple queue/lock to prevent calling WASM inference while setOptions is yielding the thread
