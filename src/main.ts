@@ -2,6 +2,8 @@ import './app_clean.css';
 import { setupObjectDetection, cleanupObjectDetection } from './tasks/object-detection';
 import { setupImageSegmentation, cleanupImageSegmentation } from './tasks/image-segmentation';
 import { setupAudioClassifier, cleanupAudioClassifier } from './tasks/audio-classifier';
+import { setupTextClassification, cleanupTextClassification } from './tasks/text-classification';
+import { setupTextEmbedding, cleanupTextEmbedding } from './tasks/text-embedding';
 import { renderSidebar } from './ui/sidebar';
 import { renderMobileNav } from './ui/mobile-nav';
 
@@ -48,6 +50,8 @@ const routes = {
   '/vision/object_detector': { setup: setupObjectDetection, cleanup: cleanupObjectDetection, label: 'Object Detection' },
   '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
   '/audio/audio_classifier': { setup: setupAudioClassifier, cleanup: cleanupAudioClassifier, label: 'Audio Classifier' },
+  '/text/text_classifier': { setup: setupTextClassification, cleanup: cleanupTextClassification, label: 'Text Classification' },
+  '/text/text_embedder': { setup: setupTextEmbedding, cleanup: cleanupTextEmbedding, label: 'Text Embedding' },
 };
 
 let currentCleanup: (() => void) | undefined;

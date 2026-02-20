@@ -18,6 +18,12 @@ export function renderSidebar(container: HTMLElement) {
       <ul>
         <li><a href="#/audio/audio_classifier" class="nav-button" data-task="audio-classifier">Audio Classifier</a></li>
       </ul>
+
+      <div class="category-header">Text</div>
+      <ul>
+        <li><a href="#/text/text_classifier" class="nav-button" data-task="text-classification">Text Classification</a></li>
+        <li><a href="#/text/text_embedder" class="nav-button" data-task="text-embedding">Text Embedding</a></li>
+      </ul>
     </nav>
   `;
 }

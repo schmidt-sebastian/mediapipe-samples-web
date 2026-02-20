@@ -16,6 +16,10 @@ export default defineConfig({
         {
           src: 'node_modules/@mediapipe/tasks-audio/wasm/*',
           dest: 'wasm'
+        },
+        {
+          src: 'node_modules/@mediapipe/tasks-text/wasm/*',
+          dest: 'wasm'
         }
       ]
     })

@@ -7,6 +7,8 @@ export function renderMobileNav(container: HTMLElement) {
         <option value="#/vision/object_detector">Object Detection</option>
         <option value="#/vision/image_segmenter">Image Segmentation</option>
         <option value="#/audio/audio_classifier">Audio Classifier</option>
+        <option value="#/text/text_classifier">Text Classification</option>
+        <option value="#/text/text_embedder">Text Embedding</option>
       </select>
   `;
 
@@ -21,6 +23,10 @@ export function renderMobileNav(container: HTMLElement) {
       select.value = '#/vision/image_segmenter';
     } else if (hash.includes('audio_classifier')) {
       select.value = '#/audio/audio_classifier';
+    } else if (hash.includes('text_classifier')) {
+      select.value = '#/text/text_classifier';
+    } else if (hash.includes('text_embedder')) {
+      select.value = '#/text/text_embedder';
     } else {
       select.value = '#/vision/object_detector';
     }
