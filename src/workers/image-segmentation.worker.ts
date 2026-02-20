@@ -153,6 +153,9 @@ self.onmessage = async (event) => {
 
 async function loadModel(path: string) {
   const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to load model from ${path}: ${response.status} ${response.statusText}`);
+  }
   const reader = response.body?.getReader();
   const contentLength = +response.headers.get('Content-Length')!;
 

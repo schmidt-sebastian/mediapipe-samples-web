@@ -107,6 +107,9 @@ self.onmessage = async (event) => {
 
 async function loadModel(path: string) {
   const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to load model from ${path}: ${response.status} ${response.statusText}`);
+  }
   const reader = response.body?.getReader();
   const contentLength = +response.headers.get('Content-Length')!;
 
@@ -173,8 +176,14 @@ async function initDetector() {
     //   wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
     // };
 
+    console.log(`[Worker] Loading model from: ${currentOptions.modelAssetPath}`);
     // Manual fetch to get buffer and report progress
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
+
+    // Validate buffer header (TFL3)
+    const header = new Uint8Array(modelBuffer.slice(0, 4));
+    console.log(`[Worker] Model Buffer Size: ${modelBuffer.byteLength}`);
+    console.log(`[Worker] Model Header: ${header[0]}, ${header[1]}, ${header[2]}, ${header[3]}`); // Should be 84, 70, 76, 51 (TFL3) or similar
 
     if (currentOptions.delegate === 'GPU') {
       console.warn('[Worker] GPU Delegate requested, but GPU delegate may be unstable in Web Worker depending on browser. Falling back to CPU if it crashes.');
