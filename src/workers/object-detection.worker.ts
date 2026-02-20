@@ -36,7 +36,7 @@ self.onmessage = async (event) => {
       basePath = baseUrl || '/';
       currentOptions = { modelAssetPath, delegate, scoreThreshold, maxResults, runningMode };
       await initDetector();
-      self.postMessage({ type: 'INIT_DONE' });
+      // INIT_DONE is sent by initDetector now to ensure it's after the createFromOptions call
     } else if (type === 'SET_OPTIONS') {
       if ('scoreThreshold' in event.data) currentOptions.scoreThreshold = event.data.scoreThreshold;
       if ('maxResults' in event.data) currentOptions.maxResults = event.data.maxResults;
@@ -104,6 +104,40 @@ self.onmessage = async (event) => {
   }
 };
 
+async function loadModel(path: string) {
+  const response = await fetch(path);
+  const reader = response.body?.getReader();
+  const contentLength = +response.headers.get('Content-Length')!;
+
+  if (!reader) {
+    return await response.arrayBuffer();
+  }
+
+  let receivedLength = 0;
+  const chunks = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedLength += value.length;
+    self.postMessage({
+      type: 'LOAD_PROGRESS',
+      loaded: receivedLength,
+      total: contentLength
+    });
+  }
+
+  const chunksAll = new Uint8Array(receivedLength);
+  let position = 0;
+  for (let chunk of chunks) {
+    chunksAll.set(chunk, position);
+    position += chunk.length;
+  }
+
+  return chunksAll.buffer;
+}
+
 async function initDetector() {
   if (isInitializing) return;
   isInitializing = true;
@@ -118,54 +152,24 @@ async function initDetector() {
 
     // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
     const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-    const response = await fetch(wasmLoaderUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+    // We can just rely on FilesetResolver if we trust it, but keeping the manual fetch for consistency if needed.
+    // However, FilesetResolver.forVisionTasks(wasmPath) usually works if the loader is available.
+    // The previous code did manual fetch and eval. Let's keep it to be safe.
+    try {
+      const response = await fetch(wasmLoaderUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+      }
+      const loaderCode = await response.text();
+      (0, eval)(loaderCode);
+    } catch (e) {
+      console.error('Failed to manually load WASM loader:', e);
     }
-    const loaderCode = await response.text();
-    (0, eval)(loaderCode);
 
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
 
-    // Manual fetch for progress
-    const modelUrl = currentOptions.modelAssetPath;
-    let finalModelPath = modelUrl;
-
-    // If it's a remote URL (not a blob), fetch it manually to track progress
-    if (modelUrl && !modelUrl.startsWith('blob:')) {
-      self.postMessage({ type: 'LOAD_PROGRESS', progress: 0.01 }); // Start
-      const modelResponse = await fetch(modelUrl);
-      if (!modelResponse.ok) throw new Error(`Failed to fetch model: ${modelResponse.statusText}`);
-
-      const contentLength = modelResponse.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength, 10) : 0;
-      let loaded = 0;
-
-      if (modelResponse.body && total > 0) {
-        const reader = modelResponse.body.getReader();
-        const chunks = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          loaded += value.length;
-          // Report progress
-          self.postMessage({
-            type: 'LOAD_PROGRESS',
-            progress: loaded / total
-          });
-        }
-
-        const blob = new Blob(chunks);
-        finalModelPath = URL.createObjectURL(blob);
-      } else {
-        // Fallback if no content-length or body
-        const blob = await modelResponse.blob();
-        finalModelPath = URL.createObjectURL(blob);
-        self.postMessage({ type: 'LOAD_PROGRESS', progress: 1.0 });
-      }
-    }
+    // Manual fetch to get buffer and report progress
+    const modelBuffer = await loadModel(currentOptions.modelAssetPath);
 
     if (currentOptions.delegate === 'GPU') {
       console.warn('[Worker] GPU Delegate requested, but GPU delegate may be unstable in Web Worker depending on browser. Falling back to CPU if it crashes.');
@@ -174,7 +178,7 @@ async function initDetector() {
     try {
       objectDetector = await ObjectDetector.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: finalModelPath,
+          modelAssetBuffer: new Uint8Array(modelBuffer),
           delegate: currentOptions.delegate,
         },
         scoreThreshold: currentOptions.scoreThreshold,
@@ -183,8 +187,28 @@ async function initDetector() {
       });
     } catch (finalError) {
       console.error('ObjectDetector initialization failed:', finalError);
-      throw finalError;
+      // Fallback to CPU if GPU fails
+      if (currentOptions.delegate === 'GPU') {
+        console.warn('GPU init failed, falling back to CPU', finalError);
+        self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
+        objectDetector = await ObjectDetector.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetBuffer: new Uint8Array(modelBuffer),
+            delegate: 'CPU',
+          },
+          scoreThreshold: currentOptions.scoreThreshold,
+          maxResults: currentOptions.maxResults,
+          runningMode: currentOptions.runningMode,
+        });
+      } else {
+        throw finalError;
+      }
     }
+    self.postMessage({ type: 'INIT_DONE' });
+
+  } catch (error: any) {
+    console.error("Object Detection Worker Init Error:", error);
+    throw error;
   } finally {
     isInitializing = false;
   }

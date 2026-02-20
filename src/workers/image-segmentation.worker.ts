@@ -1,6 +1,5 @@
 import {
   ImageSegmenter,
-  FilesetResolver,
   ImageSegmenterResult
 } from '@mediapipe/tasks-vision';
 
