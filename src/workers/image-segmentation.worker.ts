@@ -1,5 +1,6 @@
 import {
   ImageSegmenter,
+  FilesetResolver,
   ImageSegmenterResult
 } from '@mediapipe/tasks-vision';
 
@@ -209,11 +210,11 @@ async function initSegmenter() {
       console.error('Failed to manually load WASM loader:', e);
     }
 
-    // const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    const vision = {
-      wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
-      wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
-    };
+    const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    // const vision = {
+    //   wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
+    //   wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
+    // };
 
     // Manually fetch model to report progress
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
