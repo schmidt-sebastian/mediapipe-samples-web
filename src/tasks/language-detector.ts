@@ -79,10 +79,12 @@ export async function setupLanguageDetector(container: HTMLElement) {
     });
   }
 
-  // Init Worker
+  // @ts-ignore
+  import LanguageDetectorWorker from '../workers/language-detector.worker?worker';
+
+  // ... (inside class/function)
   if (!worker) {
-    worker = new Worker(new URL('../workers/language-detector.worker.ts', import.meta.url), { type: 'classic' });
-    worker.onmessage = handleWorkerMessage;
+    worker = new LanguageDetectorWorker();
   }
 
   // Initial Load
@@ -158,6 +160,18 @@ function handleWorkerMessage(event: MessageEvent) {
   const detectBtn = document.getElementById('detect-btn') as HTMLButtonElement;
 
   switch (type) {
+    case 'LOAD_PROGRESS':
+      const { loaded, total } = event.data;
+      if (loadingOverlay && total > 0) {
+        const percent = Math.round((loaded / total) * 100);
+        const loadingText = loadingOverlay.querySelector('.loading-text');
+        if (loadingText) loadingText.textContent = `Loading Model... ${percent}%`;
+      }
+      if (statusMessage && total > 0) {
+        const percent = Math.round((loaded / total) * 100);
+        statusMessage.innerText = `Loading Model... ${percent}%`;
+      }
+      break;
     case 'INIT_DONE':
       isWorkerReady = true;
       if ((window as any).modelLoadTimeout) clearTimeout((window as any).modelLoadTimeout);

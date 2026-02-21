@@ -79,10 +79,12 @@ export async function setupTextEmbedding(container: HTMLElement) {
     });
   }
 
-  // Init Worker
+  // @ts-ignore
+  import TextEmbeddingWorker from '../workers/text-embedding.worker?worker';
+
+  // ... (inside class/function)
   if (!worker) {
-    worker = new Worker(new URL('../workers/text-embedding.worker.ts', import.meta.url), { type: 'classic' });
-    worker.onmessage = handleWorkerMessage;
+    worker = new TextEmbeddingWorker();
   }
 
   await initEmbedder();
@@ -156,6 +158,18 @@ function handleWorkerMessage(event: MessageEvent) {
   const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
 
   switch (type) {
+    case 'LOAD_PROGRESS':
+      const { loaded, total } = event.data;
+      if (loadingOverlay && total > 0) {
+        const percent = Math.round((loaded / total) * 100);
+        const loadingText = loadingOverlay.querySelector('.loading-text');
+        if (loadingText) loadingText.textContent = `Loading Model... ${percent}%`;
+      }
+      if (statusMessage && total > 0) {
+        const percent = Math.round((loaded / total) * 100);
+        statusMessage.innerText = `Loading Model... ${percent}%`;
+      }
+      break;
     case 'INIT_DONE':
       isWorkerReady = true;
       if ((window as any).embedLoadTimeout) clearTimeout((window as any).embedLoadTimeout);

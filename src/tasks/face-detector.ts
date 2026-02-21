@@ -50,18 +50,18 @@ function handleWorkerMessage(event: MessageEvent) {
 
   switch (type) {
     case 'LOAD_PROGRESS':
-      const { progress } = event.data;
+      const { loaded, total } = event.data;
       const progressContainer = document.getElementById('model-loading-progress');
       const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
       const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
 
       if (progressContainer && progressBar && progressText) {
         progressContainer.style.display = 'block';
-        const percent = Math.round(progress * 100);
+        const percent = Math.round((loaded / total) * 100);
         progressBar.style.width = `${percent}%`;
         progressText.innerText = `Loading Model... ${percent}%`;
 
-        if (progress >= 1) {
+        if (percent >= 100) {
           setTimeout(() => {
             progressContainer.style.display = 'none';
           }, 500);

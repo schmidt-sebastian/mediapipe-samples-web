@@ -20,6 +20,40 @@ type WorkerMessage =
   | { type: 'DETECT'; text: string; timestampMs: number }
   | { type: 'CLEANUP' };
 
+async function loadModel(path: string) {
+  const response = await fetch(path);
+  const reader = response.body?.getReader();
+  const contentLength = +response.headers.get('Content-Length')!;
+
+  if (!reader) {
+    return await response.arrayBuffer();
+  }
+
+  let receivedLength = 0;
+  const chunks = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    receivedLength += value.length;
+    self.postMessage({
+      type: 'LOAD_PROGRESS',
+      loaded: receivedLength,
+      total: contentLength
+    });
+  }
+
+  const chunksAll = new Uint8Array(receivedLength);
+  let position = 0;
+  for (let chunk of chunks) {
+    chunksAll.set(chunk, position);
+    position += chunk.length;
+  }
+
+  return chunksAll.buffer;
+}
+
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const { type } = event.data;
 
@@ -63,20 +97,11 @@ async function initDetector(data: any) {
     const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
 
     const vision = await FilesetResolver.forTextTasks(wasmPath);
-
-    try {
-      const response = await fetch(data.modelAssetPath);
-      if (!response.ok) {
-        throw new Error(`Failed to load model from ${data.modelAssetPath}: ${response.status} ${response.statusText}`);
-      }
-    } catch (e) {
-      console.error("Model check failed", e);
-      throw e;
-    }
+    const modelBuffer = await loadModel(data.modelAssetPath);
 
     languageDetector = await LanguageDetector.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: data.modelAssetPath,
+        modelAssetBuffer: new Uint8Array(modelBuffer),
         delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
       },
       maxResults: data.maxResults || 3,
