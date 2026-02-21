@@ -56,6 +56,23 @@ body {
   flex-shrink: 0;
   z-index: 10;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+    min-height: 0;
+  }
+  
+  /* ... */
+  
+  /* Controls Panel (Left) */
+  .controls-panel {
+    width: var(--controls-width);
+    background: var(--surface);
+    border-right: 1px solid var(--border-color);
+    padding: 24px;
+    overflow-y: auto;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .sidebar-header {
