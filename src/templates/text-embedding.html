@@ -1,0 +1,151 @@
+<div class="task-container">
+  <!-- Controls on Left -->
+  <div class="controls-panel">
+    <div class="section-title">Model Selection</div>
+    <div class="select-wrapper">
+      <select id="model-select">
+        <option value="universal_sentence_encoder" selected>Universal Sentence Encoder</option>
+      </select>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-title">Settings</div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Delegate</span>
+      </div>
+      <div class="select-wrapper">
+        <select id="delegate-select">
+          <option value="CPU" selected>CPU</option>
+          <option value="GPU">GPU</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div id="status-message" class="status-message">Initializing...</div>
+  </div>
+
+  <!-- Output on Right -->
+  <div class="output-panel">
+    <div class="output-header">
+      <h2>Text Embedding</h2>
+    </div>
+
+    <div class="viewport" style="display: flex; flex-direction: column; height: 100%;">
+      <div class="comparison-container" style="padding: 20px; flex-grow: 1; overflow-y: auto;">
+        <div id="sample-text-container" style="margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
+          <span
+            style="font-size: 14px; color: var(--text-secondary); align-self: center; margin-right: 5px;">Samples:</span>
+          <button class="sample-btn" data-text1="I love this movie!" data-text2="This film is amazing.">Positive
+            Pair</button>
+          <button class="sample-btn" data-text1="I love this movie!" data-text2="I hate this film.">Opposite
+            Pair</button>
+          <button class="sample-btn" data-text1="The sky is blue."
+            data-text2="Comparison of text similarity.">Unrelated</button>
+        </div>
+
+        <div class="input-group">
+          <label for="text-input-1"
+            style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Text 1</label>
+          <textarea id="text-input-1" placeholder="Enter first text..." rows="4"></textarea>
+        </div>
+
+        <div class="input-group" style="margin-top: 20px;">
+          <label for="text-input-2"
+            style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Text 2</label>
+          <textarea id="text-input-2" placeholder="Enter second text..." rows="4"></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: center; margin-top: 30px;">
+          <button id="embed-btn" class="action-button" disabled
+            style="width: 100%; max-width: 220px; display: flex; justify-content: center; align-items: center;">
+            <span>Compute Similarity</span>
+          </button>
+        </div>
+
+        <div id="embedding-results" class="results-container" style="margin-top: 40px; display: none;">
+          <div class="similarity-card">
+            <div class="similarity-label">Cosine Similarity</div>
+            <div class="similarity-value" id="similarity-value">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="inference-time" class="inference-time"
+        style="padding: 10px 20px; text-align: right; color: var(--text-secondary); font-size: 12px;">Inference Time: -
+        ms</div>
+
+      <!-- Loading Overlay -->
+      <div id="loading-overlay" class="loading-overlay" style="display: flex;">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading Model...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Scoped styles */
+  .input-group textarea {
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--surface-color);
+    color: var(--text-primary);
+    font-family: 'Roboto', sans-serif;
+    font-size: 16px;
+    resize: vertical;
+    transition: border-color 0.2s;
+  }
+
+  .input-group textarea:focus {
+    border-color: var(--primary);
+    outline: none;
+  }
+
+  .similarity-card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  .similarity-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+
+  .similarity-value {
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--primary);
+    font-family: 'Roboto Mono', monospace;
+  }
+
+  .sample-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .sample-btn:hover {
+    background: var(--surface-color-hover);
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+</style>
