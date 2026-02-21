@@ -44,37 +44,42 @@
     </div>
 
     <div class="viewport" style="display: flex; flex-direction: column; height: 100%;">
-      <div class="input-area" style="padding: 20px;">
-        <div id="sample-text-container" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-          <span
-            style="font-size: 14px; color: var(--text-secondary); align-self: center; margin-right: 5px;">Samples:</span>
-          <button class="sample-btn"
-            data-text="The product quality is amazing and I use it every day!">Positive</button>
-          <button class="sample-btn"
-            data-text="I am very disappointed with the service, it was slow and unhelpful.">Negative</button>
-          <button class="sample-btn" data-text="The meeting is scheduled for tomorrow at 10 AM.">Neutral</button>
-        </div>
-        <textarea id="text-input" placeholder="Enter text here..." rows="6"
-          style="width: 100%; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--surface-color); color: var(--text-primary); font-family: 'Roboto', sans-serif; font-size: 16px; resize: vertical;"></textarea>
-        <div style="display: flex; justify-content: center; margin-top: 20px;">
-          <button id="classify-btn" class="action-button" disabled
-            style="width: 100%; max-width: 200px; display: flex; justify-content: center; align-items: center;">
-            <span>Classify</span>
-          </button>
-        </div>
+      <div class="input-area" style="padding: 20px; flex-shrink: 0;">
+        <div class="card input-card">
+          <div class="card-header">
+            <span class="card-title">Input Text</span>
+            <div id="sample-text-container" class="samples-container">
+              <span class="samples-label">Samples:</span>
+              <button class="sample-btn" data-text="The product quality is amazing and I use it every day!">Positive</button>
+              <button class="sample-btn"
+                data-text="I am very disappointed with the service, it was slow and unhelpful.">Negative</button>
+              <button class="sample-btn" data-text="The meeting is scheduled for tomorrow at 10 AM.">Neutral</button>
+            </div>
+          </div>
+          
+          <textarea id="text-input" placeholder="Type or paste text here to classify..." rows="4"></textarea>
+          
+          <div class="action-container">
+            <button id="classify-btn" class="action-button" disabled>
+              <span class="material-icons" style="font-size: 18px; margin-right: 8px;">analytics</span> Classify Text
+            </button>
+          </div>
+          </div>
       </div>
 
       <div id="classification-results" class="results-container"
         style="flex-grow: 1; padding: 0 20px 20px 20px; overflow-y: auto;">
-        <!-- Results injected here -->
+        <!-- Placeholder State -->
+        <div class="empty-state">
+          <span class="material-icons empty-icon">text_snippet</span>
+          <p>Results will appear here</p>
+        </div>
       </div>
 
-      <div id="inference-time" class="inference-time"
-        style="padding: 10px 20px; text-align: right; color: var(--text-secondary); font-size: 12px;">Inference Time: -
-        ms</div>
+      <div id="inference-time" class="inference-time">Inference Time: - ms</div>
 
       <!-- Loading Overlay -->
-      <div id="loading-overlay" class="loading-overlay" style="display: flex;">
+      <div id="loading-overlay" class="loading-overlay">
         <div class="spinner"></div>
         <div class="loading-text">Loading Model...</div>
       </div>
@@ -83,51 +88,46 @@
 </div>
 
 <style>
-  /* Reusing global styles, but adding specific overrides if needed */
-  .classification-item {
+  .card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .card-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 16px;
+  }
+
+  .samples-container {
     display: flex;
     align-items: center;
-    margin-bottom: 12px;
-    padding: 10px;
-    background: var(--surface-color);
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
+    gap: 8px;
   }
 
-  .class-name {
-    width: 120px;
-    font-weight: 500;
-    margin-right: 10px;
-  }
-
-  .class-bar-container {
-    flex-grow: 1;
-    background: var(--border-color);
-    height: 8px;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-right: 10px;
-  }
-
-  .class-bar {
-    height: 100%;
-    background: var(--primary);
-    transition: width 0.3s ease;
-  }
-
-  .class-score {
-    width: 50px;
-    text-align: right;
-    font-family: 'Roboto Mono', monospace;
-    font-size: 14px;
+  .samples-label {
+    font-size: 13px;
+    color: var(--text-secondary);
   }
 
   .sample-btn {
     background: transparent;
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 4px 12px;
-    font-size: 13px;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 12px;
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
@@ -137,5 +137,124 @@
     background: var(--surface-color-hover);
     color: var(--primary);
     border-color: var(--primary);
+  }
+
+  #text-input {
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--background-color);
+    color: var(--text-primary);
+    font-family: 'Roboto', sans-serif;
+    font-size: 15px;
+    resize: vertical;
+    transition: border-color 0.2s;
+    margin-bottom: 20px;
+  }
+
+  #text-input:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+
+  .action-container {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .action-button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .action-button:disabled {
+    background: var(--border-color);
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .action-button:hover:not(:disabled) {
+    background: var(--primary-hover);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 200px;
+    color: var(--text-secondary);
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+    opacity: 0.5;
+  }
+
+  .classification-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 16px;
+    background: var(--surface-color);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  }
+
+  .class-name {
+    width: 100px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  .class-bar-container {
+    flex-grow: 1;
+    background: var(--surface-color-hover);
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 0 15px;
+  }
+
+  .class-bar {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 5px;
+    transition: width 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+
+  .class-score {
+    width: 45px;
+    text-align: right;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--primary);
+  }
+
+  .inference-time {
+    padding: 10px 20px;
+    text-align: right;
+    color: var(--text-secondary);
+    font-size: 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
   }
 </style>

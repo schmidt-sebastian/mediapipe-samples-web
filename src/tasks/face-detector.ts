@@ -18,8 +18,7 @@ let minSuppressionThreshold = 0.3;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
 const models: Record<string, string> = {
-  'blaze_face_short_range': 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float32/1/blaze_face_short_range.tflite',
-  'blaze_face_full_range': 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float32/1/blaze_face_full_range.tflite'
+  'blaze_face_short_range': 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'
 };
 
 import template from '../templates/face-detector.html?raw';

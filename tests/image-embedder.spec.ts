@@ -25,29 +25,20 @@ test.describe('Image Embedder Task', () => {
 
   test('should compute similarity between two images', async ({ page }) => {
     // Choose image 1
-    const embedBtn = page.locator('#embed-btn');
-    await expect(embedBtn).toBeDisabled();
-
     // Upload same image to both slots
     const fileChooserPromise1 = page.waitForEvent('filechooser');
-    await page.click('#dropzone-1');
+    await page.click('#display-area-1');
     const fileChooser1 = await fileChooserPromise1;
     await fileChooser1.setFiles(imagePath);
 
     const fileChooserPromise2 = page.waitForEvent('filechooser');
-    await page.click('#dropzone-2');
+    await page.click('#display-area-2');
     const fileChooser2 = await fileChooserPromise2;
     await fileChooser2.setFiles(imagePath);
 
-    // Wait for button to enable
-    await expect(embedBtn).toBeEnabled({ timeout: 10000 });
-
-    // Click compute
-    await embedBtn.click();
-
-    // Check result
+    // Check result (should appear automatically)
     const valueEl = page.locator('#similarity-value');
-    await expect(valueEl).toBeVisible();
+    await expect(valueEl).toBeVisible({ timeout: 30000 });
     
     // Similarity of same image should be close to 1.0
     // Wait for text to not be '--'

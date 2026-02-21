@@ -10,64 +10,88 @@ const models: Record<string, string> = {
 };
 
 let currentModel = 'mobilenet_v3_small';
-let currentDelegate: 'CPU' | 'GPU' = 'GPU';
+let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
 export async function setupImageEmbedder(container: HTMLElement) {
   container.innerHTML = template;
 
   // UI References
-  const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
-  const imageUpload1 = document.getElementById('image-upload-1') as HTMLInputElement;
-  const imageUpload2 = document.getElementById('image-upload-2') as HTMLInputElement;
-  const dropzone1 = document.getElementById('dropzone-1')!;
-  const dropzone2 = document.getElementById('dropzone-2')!;
-  const image1 = document.getElementById('image-1') as HTMLImageElement;
-  const image2 = document.getElementById('image-2') as HTMLImageElement;
+
   const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
 
-  // Event Listeners
-  embedBtn.addEventListener('click', () => {
-    if (image1.src && image2.src) {
+  const image1 = document.getElementById('image-1') as HTMLImageElement;
+  const image2 = document.getElementById('image-2') as HTMLImageElement;
+  const display1 = document.getElementById('display-area-1')!;
+  const display2 = document.getElementById('display-area-2')!;
+
+  // Helper to set image and update UI
+  const setImage = (img: HTMLImageElement, display: HTMLElement, src: string) => {
+    img.src = src;
+    img.style.display = 'block';
+    display.classList.add('has-image');
+    const placeholder = display.querySelector('.placeholder-text') as HTMLElement;
+    if (placeholder) placeholder.style.display = 'none';
+
+    // Enable button if both images are present
+    checkEnableButton();
+  };
+
+  const checkEnableButton = () => {
+    // Check if both images have valid sources
+    if (image1.src && image2.src && image1.src.length > 0 && image2.src.length > 0) {
       computeSimilarity(image1, image2);
     }
-  });
+  };
 
-  const setupDropzone = (dropzone: HTMLElement, input: HTMLInputElement, img: HTMLImageElement) => {
-    dropzone.addEventListener('click', () => input.click());
-
-    input.addEventListener('change', (e) => {
+  const handleUpload = (input: HTMLInputElement, img: HTMLImageElement, display: HTMLElement) => {
+    input.value = ''; // Reset input to allow re-selecting same file
+    input.click();
+    input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          img.src = e.target?.result as string;
-          dropzone.querySelector('.dropzone-content')!.setAttribute('style', 'display: none;');
-          dropzone.querySelector('.preview-container')!.setAttribute('style', 'display: flex;');
-
-          // Enable button if both images are present
-          if (image1.src && image2.src && image1.naturalWidth > 0 && image2.naturalWidth > 0) {
-            embedBtn.disabled = false;
-          }
+          setImage(img, display, e.target?.result as string);
         };
         reader.readAsDataURL(file);
       }
+    };
+  };
+
+  // Attach listeners to samples
+  document.querySelectorAll('.sample-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = (btn as HTMLElement).dataset.target;
+      const src = (btn as HTMLElement).dataset.src;
+      if (targetId === '1' && src) setImage(image1, display1, src);
+      if (targetId === '2' && src) setImage(image2, display2, src);
     });
+  });
 
-    // Handle drag and drop if desired, but click is essential
-    // For now click is implemented
-  };
+  // Attach listeners to upload buttons
+  document.querySelectorAll('.upload-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = (btn as HTMLElement).dataset.target;
+      if (targetId === '1') handleUpload(document.getElementById('image-upload-1') as HTMLInputElement, image1, display1);
+      if (targetId === '2') handleUpload(document.getElementById('image-upload-2') as HTMLInputElement, image2, display2);
+    });
+  });
 
-  setupDropzone(dropzone1, imageUpload1, image1);
-  setupDropzone(dropzone2, imageUpload2, image2);
+  // Make display areas clickable for upload
+  display1.addEventListener('click', () => {
+    handleUpload(document.getElementById('image-upload-1') as HTMLInputElement, image1, display1);
+  });
 
-  // Verify images loaded before enabling button completely
-  image1.onload = () => {
-    if (image2.src && image2.naturalWidth > 0) embedBtn.disabled = false;
-  };
-  image2.onload = () => {
-    if (image1.src && image1.naturalWidth > 0) embedBtn.disabled = false;
-  };
+  display2.addEventListener('click', () => {
+    handleUpload(document.getElementById('image-upload-2') as HTMLInputElement, image2, display2);
+  });
+
+  // Image onload handlers
+  image1.onload = checkEnableButton;
+  image2.onload = checkEnableButton;
+
+
 
   if (modelSelect) {
     modelSelect.addEventListener('change', (e) => {
@@ -105,10 +129,7 @@ async function initEmbedder() {
   const statusMessage = document.getElementById('status-message');
   if (statusMessage) statusMessage.innerText = 'Loading Model...';
 
-  const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
-  if (embedBtn) {
-    embedBtn.disabled = true;
-  }
+
 
   // @ts-ignore
   const baseUrl = import.meta.env.BASE_URL;
@@ -139,7 +160,6 @@ async function initEmbedder() {
 function handleWorkerError(errorMsg: string) {
   const loadingOverlay = document.getElementById('loading-overlay');
   const statusMessage = document.getElementById('status-message');
-  const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
 
   if ((window as any).imgEmbedLoadTimeout) clearTimeout((window as any).imgEmbedLoadTimeout);
 
@@ -148,14 +168,14 @@ function handleWorkerError(errorMsg: string) {
   }
 
   if (statusMessage) statusMessage.innerText = `Error: ${errorMsg}`;
-  if (embedBtn) {
-    // Only enable if images are present
-    const image1 = document.getElementById('image-1') as HTMLImageElement;
-    const image2 = document.getElementById('image-2') as HTMLImageElement;
-    if (image1.src && image2.src) {
-      embedBtn.disabled = false;
-      embedBtn.innerText = "Retry";
-    }
+
+  // Only enable if images are present
+  const image1 = document.getElementById('image-1') as HTMLImageElement;
+  const image2 = document.getElementById('image-2') as HTMLImageElement;
+  // Check using src property
+  if (image1.src && image2.src && image1.src.length > 0 && image2.src.length > 0) {
+    // Auto retry?
+    computeSimilarity(image1, image2);
   }
 }
 
@@ -163,7 +183,6 @@ function handleWorkerMessage(event: MessageEvent) {
   const { type } = event.data;
   const loadingOverlay = document.getElementById('loading-overlay');
   const statusMessage = document.getElementById('status-message');
-  const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
 
   switch (type) {
     case 'INIT_DONE':
@@ -175,9 +194,10 @@ function handleWorkerMessage(event: MessageEvent) {
 
       const image1 = document.getElementById('image-1') as HTMLImageElement;
       const image2 = document.getElementById('image-2') as HTMLImageElement;
-      if (embedBtn && image1.src && image2.src) {
-        embedBtn.disabled = false;
-        embedBtn.innerText = 'Compute Similarity';
+
+      if (image1 && image2 && image1.src && image2.src && image1.src.length > 0 && image2.src.length > 0) {
+        // Auto-compute on init if images present
+        computeSimilarity(image1, image2);
       }
       break;
     case 'EMBED_RESULT':
@@ -188,7 +208,6 @@ function handleWorkerMessage(event: MessageEvent) {
         inferenceTimeEl.innerText = `Inference Time: ${duration.toFixed(1)} ms`;
       }
       displayResults(similarity);
-      if (embedBtn) embedBtn.disabled = false;
       if (statusMessage) statusMessage.innerText = 'Done';
       break;
     case 'DELEGATE_FALLBACK':
@@ -207,10 +226,8 @@ function handleWorkerMessage(event: MessageEvent) {
 async function computeSimilarity(img1: HTMLImageElement, img2: HTMLImageElement) {
   if (!worker || !isWorkerReady) return;
 
-  const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
   const statusMessage = document.getElementById('status-message');
 
-  embedBtn.disabled = true;
   if (statusMessage) statusMessage.innerText = 'Computing...';
 
   const bitmap1 = await createImageBitmap(img1);
@@ -229,7 +246,6 @@ function displayResults(similarity: number) {
   const valueEl = document.getElementById('similarity-value');
 
   if (container && valueEl) {
-    container.style.display = 'block';
     valueEl.innerText = similarity.toFixed(4);
   }
 }
