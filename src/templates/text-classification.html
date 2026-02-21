@@ -44,12 +44,11 @@
     </div>
 
     <div class="viewport" style="display: flex; flex-direction: column; height: 100%;">
-      <div class="input-area" style="padding: 20px; flex-shrink: 0;">
+      <div class="input-area" style="padding: 20px; flex-shrink: 0; width: 100%; max-width: 600px;">
         <div class="card input-card">
           <div class="card-header">
             <span class="card-title">Input Text</span>
             <div id="sample-text-container" class="samples-container">
-              <span class="samples-label">Samples:</span>
               <button class="sample-btn" data-text="The product quality is amazing and I use it every day!">Positive</button>
               <button class="sample-btn"
                 data-text="I am very disappointed with the service, it was slow and unhelpful.">Negative</button>
@@ -57,7 +56,8 @@
             </div>
           </div>
           
-          <textarea id="text-input" placeholder="Type or paste text here to classify..." rows="4"></textarea>
+          <textarea id="text-input" placeholder="Type or paste text here to classify..." rows="6"
+            style="min-height: 150px;"></textarea>
           
           <div class="action-container">
             <button id="classify-btn" class="action-button" disabled>
@@ -134,6 +134,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   .samples-label {

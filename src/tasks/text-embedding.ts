@@ -28,7 +28,7 @@ export async function setupTextEmbedding(container: HTMLElement) {
     }
   });
 
-  // Sample Buttons
+  // Sample Buttons (Pairs)
   const sampleBtns = container.querySelectorAll('.sample-btn');
   sampleBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -39,6 +39,26 @@ export async function setupTextEmbedding(container: HTMLElement) {
         textInput1.value = t1;
         textInput2.value = t2;
         computeSimilarity(t1, t2);
+      }
+    });
+  });
+
+  // Individual Sample Chips
+  const sampleChips = container.querySelectorAll('.sample-chip');
+  sampleChips.forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      const el = e.currentTarget as HTMLElement;
+      const targetId = el.dataset.target;
+      const text = el.dataset.text;
+      if (targetId && text) {
+        const targetInput = document.getElementById(targetId) as HTMLTextAreaElement;
+        if (targetInput) {
+          targetInput.value = text;
+          // Trigger computation if both have values
+          if (textInput1.value.trim() && textInput2.value.trim()) {
+            computeSimilarity(textInput1.value, textInput2.value);
+          }
+        }
       }
     });
   });

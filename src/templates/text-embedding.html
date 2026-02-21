@@ -37,33 +37,43 @@
 
     <div class="viewport" style="display: flex; flex-direction: column; height: 100%;">
       <div class="comparison-container" style="padding: 20px; flex-grow: 1; overflow-y: auto;">
-        <div id="sample-text-container" style="margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
-          <span
-            style="font-size: 14px; color: var(--text-secondary); align-self: center; margin-right: 5px;">Samples:</span>
-          <button class="sample-btn" data-text1="I love this movie!" data-text2="This film is amazing.">Positive
-            Pair</button>
-          <button class="sample-btn" data-text1="I love this movie!" data-text2="I hate this film.">Opposite
-            Pair</button>
-          <button class="sample-btn" data-text1="The sky is blue."
-            data-text2="Comparison of text similarity.">Unrelated</button>
-        </div>
+        <div class="embedding-grid">
+          <!-- Text 1 Column -->
+          <div class="input-column">
+            <div class="card input-card">
+              <div class="card-header">
+                <span class="card-title">Text 1</span>
+                <div class="samples-row">
+                  <button class="sample-chip" data-target="text-input-1" data-text="I love this movie!">Positive</button>
+                  <button class="sample-chip" data-target="text-input-1" data-text="The sky is blue.">Fact</button>
+                  <button class="sample-chip" data-target="text-input-1" data-text="Hello world.">Greeting</button>
+                </div>
+              </div>
+              <textarea id="text-input-1" placeholder="Enter first text..." rows="6"></textarea>
+              </div>
+              </div>
 
-        <div class="input-group">
-          <label for="text-input-1"
-            style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Text 1</label>
-          <textarea id="text-input-1" placeholder="Enter first text..." rows="4"></textarea>
-        </div>
-
-        <div class="input-group" style="margin-top: 20px;">
-          <label for="text-input-2"
-            style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-secondary);">Text 2</label>
-          <textarea id="text-input-2" placeholder="Enter second text..." rows="4"></textarea>
+          <!-- Text 2 Column -->
+          <div class="input-column">
+            <div class="card input-card">
+              <div class="card-header">
+                <span class="card-title">Text 2</span>
+                <div class="samples-row">
+                  <button class="sample-chip" data-target="text-input-2" data-text="This film is amazing.">Positive</button>
+                  <button class="sample-chip" data-target="text-input-2" data-text="I hate this film.">Negative</button>
+                  <button class="sample-chip" data-target="text-input-2"
+                    data-text="Comparison of text similarity.">Phrase</button>
+                </div>
+              </div>
+              <textarea id="text-input-2" placeholder="Enter second text..." rows="6"></textarea>
+            </div>
+          </div>
         </div>
 
         <div style="display: flex; justify-content: center; margin-top: 30px;">
           <button id="embed-btn" class="action-button" disabled
-            style="width: 100%; max-width: 220px; display: flex; justify-content: center; align-items: center;">
-            <span>Compute Similarity</span>
+            style="width: 100%; max-width: 250px; display: flex; justify-content: center; align-items: center;">
+            <span class="material-icons" style="margin-right: 8px;">compare_arrows</span> Compute Similarity
           </button>
         </div>
 
@@ -89,23 +99,111 @@
 </div>
 
 <style>
-  /* Scoped styles */
-  .input-group textarea {
+  .embedding-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* Responsive: Stack on small screens */
+  @media (max-width: 768px) {
+    .embedding-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .card-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 16px;
+  }
+
+  .samples-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .sample-chip {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .sample-chip:hover {
+    background: var(--surface-color-hover);
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+
+  textarea {
     width: 100%;
     padding: 15px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
-    background: var(--surface-color);
+    background: var(--background-color);
     color: var(--text-primary);
     font-family: 'Roboto', sans-serif;
-    font-size: 16px;
-    resize: vertical;
+    font-size: 15px;
+    resize: none; /* Fixed size layout */
     transition: border-color 0.2s;
+    flex-grow: 1;
+    min-height: 150px;
   }
 
-  .input-group textarea:focus {
+  textarea:focus {
     border-color: var(--primary);
     outline: none;
+  }
+
+  .action-button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .action-button:disabled {
+    background: var(--border-color);
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .action-button:hover:not(:disabled) {
+    background: var(--primary-hover);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 
   .similarity-card {
@@ -115,6 +213,8 @@
     padding: 30px;
     text-align: center;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    margin: 0 auto;
   }
 
   .similarity-label {
@@ -132,20 +232,12 @@
     font-family: 'Roboto Mono', monospace;
   }
 
-  .sample-btn {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 4px 12px;
-    font-size: 13px;
+  .inference-time {
+    padding: 10px 20px;
+    text-align: right;
     color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .sample-btn:hover {
-    background: var(--surface-color-hover);
-    color: var(--primary);
-    border-color: var(--primary);
+    font-size: 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
   }
 </style>
