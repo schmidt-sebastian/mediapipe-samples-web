@@ -11,7 +11,9 @@ export function renderSidebar(container: HTMLElement) {
       <div class="category-header">Vision</div>
       <ul>
         <li><a href="#/vision/object_detector" class="nav-button" data-task="object-detection">Object Detection</a></li>
+        <li><a href="#/vision/face_detector" class="nav-button" data-task="face-detector">Face Detection</a></li>
         <li><a href="#/vision/image_segmenter" class="nav-button" data-task="image-segmentation">Image Segmentation</a></li>
+        <li><a href="#/vision/image_embedder" class="nav-button" data-task="image-embedder">Image Embedding</a></li>
       </ul>
 
       <div class="category-header">Audio</div>
@@ -22,6 +24,7 @@ export function renderSidebar(container: HTMLElement) {
       <div class="category-header">Text</div>
       <ul>
         <li><a href="#/text/text_classifier" class="nav-button" data-task="text-classification">Text Classification</a></li>
+        <li><a href="#/text/language_detector" class="nav-button" data-task="language-detector">Language Detection</a></li>
         <li><a href="#/text/text_embedder" class="nav-button" data-task="text-embedding">Text Embedding</a></li>
       </ul>
     </nav>

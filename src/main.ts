@@ -4,6 +4,9 @@ import { setupImageSegmentation, cleanupImageSegmentation } from './tasks/image-
 import { setupAudioClassifier, cleanupAudioClassifier } from './tasks/audio-classifier';
 import { setupTextClassification, cleanupTextClassification } from './tasks/text-classification';
 import { setupTextEmbedding, cleanupTextEmbedding } from './tasks/text-embedding';
+import { setupFaceDetector, cleanupFaceDetector } from './tasks/face-detector';
+import { setupLanguageDetector, cleanupLanguageDetector } from './tasks/language-detector';
+import { setupImageEmbedder, cleanupImageEmbedder } from './tasks/image-embedder';
 import { renderSidebar } from './ui/sidebar';
 import { renderMobileNav } from './ui/mobile-nav';
 
@@ -48,9 +51,12 @@ const mainContent = app.querySelector('.main-content') as HTMLElement;
 // 4. Router Setup
 const routes = {
   '/vision/object_detector': { setup: setupObjectDetection, cleanup: cleanupObjectDetection, label: 'Object Detection' },
+  '/vision/face_detector': { setup: setupFaceDetector, cleanup: cleanupFaceDetector, label: 'Face Detection' },
   '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
+  '/vision/image_embedder': { setup: setupImageEmbedder, cleanup: cleanupImageEmbedder, label: 'Image Embedding' },
   '/audio/audio_classifier': { setup: setupAudioClassifier, cleanup: cleanupAudioClassifier, label: 'Audio Classifier' },
   '/text/text_classifier': { setup: setupTextClassification, cleanup: cleanupTextClassification, label: 'Text Classification' },
+  '/text/language_detector': { setup: setupLanguageDetector, cleanup: cleanupLanguageDetector, label: 'Language Detection' },
   '/text/text_embedder': { setup: setupTextEmbedding, cleanup: cleanupTextEmbedding, label: 'Text Embedding' },
 };
 

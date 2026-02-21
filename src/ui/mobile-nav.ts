@@ -5,9 +5,12 @@ export function renderMobileNav(container: HTMLElement) {
       </div>
       <select id="mobile-task-select" class="mobile-task-select">
         <option value="#/vision/object_detector">Object Detection</option>
+        <option value="#/vision/face_detector">Face Detection</option>
         <option value="#/vision/image_segmenter">Image Segmentation</option>
+        <option value="#/vision/image_embedder">Image Embedding</option>
         <option value="#/audio/audio_classifier">Audio Classifier</option>
         <option value="#/text/text_classifier">Text Classification</option>
+        <option value="#/text/language_detector">Language Detection</option>
         <option value="#/text/text_embedder">Text Embedding</option>
       </select>
   `;

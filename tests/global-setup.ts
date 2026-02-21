@@ -73,6 +73,22 @@ export default async function globalSetup() {
         {
             name: 'universal_sentence_encoder.tflite',
             url: 'https://storage.googleapis.com/mediapipe-models/text_embedder/universal_sentence_encoder/float32/1/universal_sentence_encoder.tflite'
+        },
+        {
+            name: 'blaze_face_short_range.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'
+        },
+        {
+            name: 'language_detector.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/language_detector/language_detector/float32/1/language_detector.tflite'
+        },
+        {
+            name: 'mobilenet_v3_small.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite'
+        },
+        {
+            name: 'mobilenet_v3_large.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_large/float32/1/mobilenet_v3_large.tflite'
         }
     ];
 
