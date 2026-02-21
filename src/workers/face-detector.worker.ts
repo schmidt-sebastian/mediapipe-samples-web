@@ -149,19 +149,6 @@ async function initDetector() {
     }
 
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
-      }
-      const loaderCode = await response.text();
-      (0, eval)(loaderCode);
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
-
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
 

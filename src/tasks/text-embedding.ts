@@ -81,7 +81,7 @@ export async function setupTextEmbedding(container: HTMLElement) {
 
   // Init Worker
   if (!worker) {
-    worker = new Worker(new URL('../workers/text-embedding.worker.ts', import.meta.url), { type: 'module' });
+    worker = new Worker(new URL('../workers/text-embedding.worker.ts', import.meta.url), { type: 'classic' });
     worker.onmessage = handleWorkerMessage;
   }
 

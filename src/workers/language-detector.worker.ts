@@ -62,20 +62,6 @@ async function initDetector(data: any) {
 
     const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
 
-    // Workaround for Vite + MediaPipe WASM loading in workers
-    const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (response.ok) {
-        const loaderCode = await response.text();
-        const factory = (0, eval)(loaderCode + ';ModuleFactory;');
-        // @ts-ignore
-        self.createMediapipeTasksTextModule = factory;
-      }
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
-
     const vision = await FilesetResolver.forTextTasks(wasmPath);
 
     try {

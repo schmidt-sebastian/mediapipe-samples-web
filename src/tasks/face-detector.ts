@@ -36,12 +36,9 @@ export async function setupFaceDetector(container: HTMLElement) {
   await initializeDetector();
 }
 
-// @ts-ignore
-import FaceDetectorWorker from '../workers/face-detector.worker.ts?worker';
-
 function initWorker() {
   if (!worker) {
-    worker = new FaceDetectorWorker();
+    worker = new Worker(new URL('../workers/face-detector.worker.ts', import.meta.url), { type: 'classic' });
   }
   if (worker) {
     worker.onmessage = handleWorkerMessage;

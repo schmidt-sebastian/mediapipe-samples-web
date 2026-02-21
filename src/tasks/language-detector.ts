@@ -81,7 +81,7 @@ export async function setupLanguageDetector(container: HTMLElement) {
 
   // Init Worker
   if (!worker) {
-    worker = new Worker(new URL('../workers/language-detector.worker.ts', import.meta.url), { type: 'module' });
+    worker = new Worker(new URL('../workers/language-detector.worker.ts', import.meta.url), { type: 'classic' });
     worker.onmessage = handleWorkerMessage;
   }
 
