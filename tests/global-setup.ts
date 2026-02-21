@@ -61,6 +61,18 @@ export default async function globalSetup() {
         {
             name: 'yamnet.tflite',
             url: 'https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/1/yamnet.tflite'
+        },
+        {
+            name: 'bert_classifier.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/text_classifier/bert_classifier/float32/1/bert_classifier.tflite'
+        },
+        {
+            name: 'average_word_classifier.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/text_classifier/average_word_classifier/float32/1/average_word_classifier.tflite'
+        },
+        {
+            name: 'universal_sentence_encoder.tflite',
+            url: 'https://storage.googleapis.com/mediapipe-models/text_embedder/universal_sentence_encoder/float32/1/universal_sentence_encoder.tflite'
         }
     ];
 
