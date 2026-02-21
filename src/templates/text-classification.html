@@ -69,10 +69,29 @@
 
       <div id="classification-results" class="results-container"
         style="flex-grow: 1; padding: 0 20px 20px 20px; overflow-y: auto;">
-        <!-- Placeholder State -->
-        <div class="empty-state">
-          <span class="material-icons empty-icon">text_snippet</span>
-          <p>Results will appear here</p>
+        <!-- Placeholder State (Fake Results) -->
+        <div class="placeholder-results">
+          <div class="classification-item placeholder-item">
+            <span class="class-name">Positive</span>
+            <div class="class-bar-container">
+              <div class="class-bar" style="width: 75%"></div>
+            </div>
+            <span class="class-score">--</span>
+          </div>
+          <div class="classification-item placeholder-item">
+            <span class="class-name">Negative</span>
+            <div class="class-bar-container">
+              <div class="class-bar" style="width: 25%"></div>
+            </div>
+            <span class="class-score">--</span>
+          </div>
+          <div class="classification-item placeholder-item">
+            <span class="class-name">Neutral</span>
+            <div class="class-bar-container">
+              <div class="class-bar" style="width: 10%"></div>
+            </div>
+            <span class="class-score">--</span>
+          </div>
         </div>
       </div>
 
@@ -188,22 +207,20 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    min-height: 200px;
-    color: var(--text-secondary);
-    border: 2px dashed var(--border-color);
-    border-radius: 12px;
+  /* Placeholder Styling */
+  .placeholder-results {
+    opacity: 0.6;
+    pointer-events: none;
+    filter: grayscale(100%);
   }
 
-  .empty-icon {
-    font-size: 48px;
-    margin-bottom: 10px;
-    opacity: 0.5;
+  .placeholder-item .class-bar {
+    background: var(--border-color) !important;
+  }
+
+  .placeholder-item .class-name,
+  .placeholder-item .class-score {
+    color: var(--text-secondary) !important;
   }
 
   .classification-item {
