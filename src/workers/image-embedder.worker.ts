@@ -71,9 +71,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
 
 
-// ... (imports)
 
-// (Deleted local loadModel)
+
+
 
 async function initEmbedder(data: any) {
   if (isInitializing) return;

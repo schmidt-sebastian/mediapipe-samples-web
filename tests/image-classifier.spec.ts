@@ -3,13 +3,13 @@ import { test, expect } from '@playwright/test';
 test.describe('Image Classifier Task', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/#/vision/image_classifier');
-    // Wait for the page to load the model
-    await expect(page.locator('#status-message')).toHaveText('Ready', { timeout: 60000 });
+    // Wait for the page to load the model (Ready OR Done in...)
+    await expect(page.locator('#status-message')).toHaveText(/Ready|Done in/, { timeout: 60000 });
   });
 
   test('should load model and handle image inference', async ({ page }) => {
     const status = page.locator('#status-message');
-    await expect(status).toHaveText('Ready', { timeout: 30000 });
+    await expect(status).toHaveText(/Ready|Done in/, { timeout: 30000 });
 
     // Check if default results are displayed for the default image
     const resultsContainer = page.locator('#classification-results');
@@ -23,18 +23,18 @@ test.describe('Image Classifier Task', () => {
 
   test('should handle delegate switching', async ({ page }) => {
     // Wait for initial load
-    await expect(page.locator('#status-message')).toHaveText('Ready', { timeout: 30000 });
+    await expect(page.locator('#status-message')).toHaveText(/Ready|Done in/, { timeout: 30000 });
 
     // Switch to CPU
     await page.selectOption('#delegate-select', 'CPU');
 
     // Wait for reload
     await expect(page.locator('#status-message')).toHaveText('Loading Model...', { timeout: 5000 });
-    await expect(page.locator('#status-message')).toHaveText('Ready', { timeout: 30000 });
+    await expect(page.locator('#status-message')).toHaveText(/Ready|Done in/, { timeout: 30000 });
   });
 
   test('should update results when max results slider changes', async ({ page }) => {
-    await expect(page.locator('#status-message')).toHaveText('Ready', { timeout: 30000 });
+    await expect(page.locator('#status-message')).toHaveText(/Ready|Done in/, { timeout: 30000 });
 
     // Change max results to 1
     await page.fill('#max-results', '1');

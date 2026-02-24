@@ -150,9 +150,9 @@ self.onmessage = async (event) => {
 
 
 
-// ...
 
-// (Deleted local loadModel)
+
+
 
 async function initSegmenter() {
   if (isInitializing) return;

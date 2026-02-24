@@ -21,7 +21,7 @@ import { loadModel } from '../utils/model-loader';
 
 // ... (rest of imports)
 
-// (Deleted local loadModel function)
+
 
 async function initEmbedder(data: any) {
   if (isInitializing) return;

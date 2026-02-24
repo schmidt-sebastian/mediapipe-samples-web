@@ -104,9 +104,9 @@ self.onmessage = async (event) => {
 
 
 
-// ...
 
-// (Deleted local loadModel)
+
+
 
 async function initDetector() {
   if (isInitializing) return;

@@ -59,29 +59,13 @@ async function segment(data: any) {
   }
 
   try {
-    const { bitmap, pt } = data; // pt is { x: 0..1, y: 0..1 } normalized? or relative?
-    // InteractiveSegmenter expects RegionOfInterest.
-    // We can use keypoint for click.
-
-    // According to docs, we pass the image and the ROI.
-    // The ROI for click is usually a keypoint.
-
+    const { bitmap, pt } = data;
     const timestampMs = performance.now();
-
-    // Convert normalized or pixel coordinates?
-    // InteractiveSegmenter.segment(image, roi, rotation)
-    // ROI: { keypoint: { x, y } } - x, y are normalized [0, 1]???
-    // Docs say: "The RegionOfInterest to segment. This is required for interactive segmentation."
 
     const result = interactiveSegmenter.segment(bitmap, {
       keypoint: { x: pt.x, y: pt.y }
     });
 
-    // Loop over result.categoryMasks -> convert to ImageBitmap or Uint8Array to send back?
-    // result.categoryMask matches the input image size.
-    // We can send the Float32Array or Uint8Array back.
-
-    // categoryMask is MPMask.
     const categoryMask = result.categoryMask;
     let maskData: Uint8Array | Float32Array | null = null;
     let width = 0;
@@ -90,10 +74,7 @@ async function segment(data: any) {
     if (categoryMask) {
       width = categoryMask.width;
       height = categoryMask.height;
-      // We need to export it. 
-      // As Uint8Array?
       maskData = categoryMask.getAsUint8Array();
-      // Or getAsFloat32Array() if confidence? Category is usually uint8.
     }
 
     const transfer = maskData ? [maskData.buffer] : [];
