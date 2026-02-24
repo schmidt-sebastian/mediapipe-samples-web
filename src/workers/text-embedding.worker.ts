@@ -37,7 +37,7 @@ async function initEmbedder(data: any) {
     const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
 
     // Inject the loader using our shared utility
-    await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;', true); // The 'true' indicates appendScript
+    await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;'); // The 'true' indicates appendScript (removed as it was invalid)
     // The local polyfill `self.createMediapipeTasksTextModule = factory;` is removed as loadWasmModule now handles appending.
 
     const text = await FilesetResolver.forTextTasks(wasmPath);
