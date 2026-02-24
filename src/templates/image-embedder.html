@@ -49,6 +49,9 @@
               <button class="upload-btn" data-target="1">
                 <span class="material-icons" style="font-size: 18px; margin-right: 4px;">upload</span> Upload
               </button>
+              <button class="camera-btn" data-target="1">
+                <span class="material-icons" style="font-size: 18px; margin-right: 4px;">photo_camera</span> Camera
+              </button>
               <input type="file" id="image-upload-1" accept="image/*" style="display: none;">
             </div>
             <div class="image-display-area" id="display-area-1">
@@ -66,6 +69,9 @@
               <button class="sample-btn" data-target="2" data-src="elephant.png">Elephant</button>
               <button class="upload-btn" data-target="2">
                 <span class="material-icons" style="font-size: 18px; margin-right: 4px;">upload</span> Upload
+              </button>
+              <button class="camera-btn" data-target="2">
+                <span class="material-icons" style="font-size: 18px; margin-right: 4px;">photo_camera</span> Camera
               </button>
               <input type="file" id="image-upload-2" accept="image/*" style="display: none;">
             </div>
@@ -141,6 +147,24 @@
           .upload-btn:hover {
             background: var(--primary);
             color: white;
+          }
+
+          .camera-btn {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+          }
+
+          .camera-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
           }
         
           .image-display-area {
@@ -228,4 +252,3 @@
             100% { transform: rotate(360deg); }
           }
         </style>
-

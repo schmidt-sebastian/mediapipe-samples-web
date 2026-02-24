@@ -7,6 +7,12 @@ import { setupTextEmbedding, cleanupTextEmbedding } from './tasks/text-embedding
 import { setupFaceDetector, cleanupFaceDetector } from './tasks/face-detector';
 import { setupLanguageDetector, cleanupLanguageDetector } from './tasks/language-detector';
 import { setupImageEmbedder, cleanupImageEmbedder } from './tasks/image-embedder';
+import { setupImageClassifier, cleanupImageClassifier } from './tasks/image-classifier';
+import { setupInteractiveSegmentation, cleanupInteractiveSegmentation } from './tasks/interactive-segmentation';
+import { setupGestureRecognizer, cleanupGestureRecognizer } from './tasks/gesture-recognizer';
+import { setupHandLandmarker, cleanupHandLandmarker } from './tasks/hand-landmarker';
+import { setupFaceLandmarker, cleanupFaceLandmarker } from './tasks/face-landmarker';
+import { setupPoseLandmarker, cleanupPoseLandmarker } from './tasks/pose-landmarker';
 import { renderSidebar } from './ui/sidebar';
 import { renderMobileNav } from './ui/mobile-nav';
 
@@ -52,8 +58,14 @@ const mainContent = app.querySelector('.main-content') as HTMLElement;
 const routes = {
   '/vision/object_detector': { setup: setupObjectDetection, cleanup: cleanupObjectDetection, label: 'Object Detection' },
   '/vision/face_detector': { setup: setupFaceDetector, cleanup: cleanupFaceDetector, label: 'Face Detection' },
+  '/vision/image_classifier': { setup: setupImageClassifier, cleanup: cleanupImageClassifier, label: 'Image Classification' },
   '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
+  '/vision/interactive_segmenter': { setup: setupInteractiveSegmentation, cleanup: cleanupInteractiveSegmentation, label: 'Interactive Segmentation' },
+  '/vision/gesture_recognizer': { setup: setupGestureRecognizer, cleanup: cleanupGestureRecognizer, label: 'Gesture Recognition' },
+  '/vision/hand_landmarker': { setup: setupHandLandmarker, cleanup: cleanupHandLandmarker, label: 'Hand Landmark Detection' },
   '/vision/image_embedder': { setup: setupImageEmbedder, cleanup: cleanupImageEmbedder, label: 'Image Embedding' },
+  '/vision/face_landmarker': { setup: setupFaceLandmarker, cleanup: cleanupFaceLandmarker, label: 'Face Landmark Detection' },
+  '/vision/pose_landmarker': { setup: setupPoseLandmarker, cleanup: cleanupPoseLandmarker, label: 'Pose Landmark Detection' },
   '/audio/audio_classifier': { setup: setupAudioClassifier, cleanup: cleanupAudioClassifier, label: 'Audio Classifier' },
   '/text/text_classifier': { setup: setupTextClassification, cleanup: cleanupTextClassification, label: 'Text Classification' },
   '/text/language_detector': { setup: setupLanguageDetector, cleanup: cleanupLanguageDetector, label: 'Language Detection' },

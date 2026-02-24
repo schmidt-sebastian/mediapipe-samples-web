@@ -1,7 +1,10 @@
 import template from '../templates/image-embedder.html?raw';
+import { bindCameraCapture } from './vision-task-utils';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
+let disposeCameraCapture1: (() => void) | undefined;
+let disposeCameraCapture2: (() => void) | undefined;
 
 // Options
 const models: Record<string, string> = {
@@ -77,6 +80,19 @@ export async function setupImageEmbedder(container: HTMLElement) {
       if (targetId === '2') handleUpload(document.getElementById('image-upload-2') as HTMLInputElement, image2, display2);
     });
   });
+
+  const cameraBtn1 = document.querySelector('.camera-btn[data-target="1"]') as HTMLButtonElement | null;
+  const cameraBtn2 = document.querySelector('.camera-btn[data-target="2"]') as HTMLButtonElement | null;
+  if (cameraBtn1) {
+    disposeCameraCapture1 = bindCameraCapture(cameraBtn1, image1, async () => {
+      checkEnableButton();
+    });
+  }
+  if (cameraBtn2) {
+    disposeCameraCapture2 = bindCameraCapture(cameraBtn2, image2, async () => {
+      checkEnableButton();
+    });
+  }
 
   // Make display areas clickable for upload
   display1.addEventListener('click', () => {
@@ -264,6 +280,10 @@ function displayResults(similarity: number) {
 }
 
 export function cleanupImageEmbedder() {
+  disposeCameraCapture1?.();
+  disposeCameraCapture1 = undefined;
+  disposeCameraCapture2?.();
+  disposeCameraCapture2 = undefined;
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
   }

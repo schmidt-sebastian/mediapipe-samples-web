@@ -6,8 +6,14 @@ export function renderMobileNav(container: HTMLElement) {
       <select id="mobile-task-select" class="mobile-task-select">
         <option value="#/vision/object_detector">Object Detection</option>
         <option value="#/vision/face_detector">Face Detection</option>
+        <option value="#/vision/image_classifier">Image Classification</option>
         <option value="#/vision/image_segmenter">Image Segmentation</option>
+        <option value="#/vision/interactive_segmenter">Interactive Segmentation</option>
+        <option value="#/vision/gesture_recognizer">Gesture Recognition</option>
+        <option value="#/vision/hand_landmarker">Hand Landmark Detection</option>
         <option value="#/vision/image_embedder">Image Embedding</option>
+        <option value="#/vision/face_landmarker">Face Landmark Detection</option>
+        <option value="#/vision/pose_landmarker">Pose Landmark Detection</option>
         <option value="#/audio/audio_classifier">Audio Classifier</option>
         <option value="#/text/text_classifier">Text Classification</option>
         <option value="#/text/language_detector">Language Detection</option>
@@ -20,19 +26,8 @@ export function renderMobileNav(container: HTMLElement) {
   // Sync select with current hash
   const updateSelect = () => {
     const hash = window.location.hash || '#/vision/object_detector';
-    // Handle potential trailing slashes or varying formats if necessary
-    // For now, exact match or default
-    if (hash.includes('image_segmenter')) {
-      select.value = '#/vision/image_segmenter';
-    } else if (hash.includes('audio_classifier')) {
-      select.value = '#/audio/audio_classifier';
-    } else if (hash.includes('text_classifier')) {
-      select.value = '#/text/text_classifier';
-    } else if (hash.includes('text_embedder')) {
-      select.value = '#/text/text_embedder';
-    } else {
-      select.value = '#/vision/object_detector';
-    }
+    const options = Array.from(select.options).map(option => option.value);
+    select.value = options.includes(hash) ? hash : '#/vision/object_detector';
   };
 
   updateSelect();
