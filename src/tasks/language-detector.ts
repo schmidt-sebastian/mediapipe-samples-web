@@ -1,4 +1,6 @@
 import template from '../templates/language-detector.html?raw';
+// @ts-ignore
+import LanguageDetectorWorker from '../workers/language-detector.worker.ts?worker';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
@@ -79,12 +81,9 @@ export async function setupLanguageDetector(container: HTMLElement) {
     });
   }
 
-  // @ts-ignore
-  import LanguageDetectorWorker from '../workers/language-detector.worker?worker';
-
-  // ... (inside class/function)
   if (!worker) {
     worker = new LanguageDetectorWorker();
+    worker.onmessage = handleWorkerMessage;
   }
 
   // Initial Load

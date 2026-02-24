@@ -4,15 +4,10 @@ import {
   Detection,
 } from '@mediapipe/tasks-vision';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
+// MediaPipe's worker runtime expects self.import to exist in non-module workers.
+if (typeof (self as any).import !== 'function') {
+  (self as any).import = (url: string) => import(/* @vite-ignore */ url);
 }
-
-// MediaPipe Emscripten fallback
-// @ts-ignore
-self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
 let objectDetector: ObjectDetector | undefined = undefined;
 let isInitializing = false;
@@ -20,6 +15,8 @@ let currentOptions: any = {};
 let basePath = '/';
 
 let isProcessing = false;
+let lastVideoTimestampMs = -1;
+let frameCanvas: OffscreenCanvas | undefined;
 
 self.onmessage = async (event) => {
   const { type } = event.data;
@@ -68,10 +65,15 @@ self.onmessage = async (event) => {
       let detections: { detections: Detection[] };
 
       try {
+        const imageData = bitmapToImageData(bitmap);
         if (requiredMode === 'VIDEO') {
-          detections = objectDetector.detectForVideo(bitmap, timestampMs);
+          const safeTimestampMs = timestampMs > lastVideoTimestampMs ? timestampMs : lastVideoTimestampMs + 1;
+          lastVideoTimestampMs = safeTimestampMs;
+          // In workers, VideoFrame/ImageBitmap GPU upload may fail with missing WebGL context.
+          // Prefer ImageData + detect() to avoid the activeTexture worker crash path.
+          detections = objectDetector.detect(imageData);
         } else {
-          detections = objectDetector.detect(bitmap);
+          detections = objectDetector.detect(imageData);
         }
       } catch (e: any) {
         console.error("Worker detection error:", e);
@@ -94,6 +96,7 @@ self.onmessage = async (event) => {
         objectDetector.close();
         objectDetector = undefined;
       }
+      lastVideoTimestampMs = -1;
       self.postMessage({ type: 'CLEANUP_DONE' });
     }
   } catch (error: any) {
@@ -106,8 +109,11 @@ self.onmessage = async (event) => {
 
 async function loadModel(path: string) {
   const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch model: ${response.status} ${response.statusText}`);
+  }
   const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
+  const contentLength = +(response.headers.get('Content-Length') || '0');
 
   if (!reader) {
     return await response.arrayBuffer();
@@ -149,65 +155,26 @@ async function initDetector() {
     }
 
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-
-    // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
-    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-    // We can just rely on FilesetResolver if we trust it, but keeping the manual fetch for consistency if needed.
-    // However, FilesetResolver.forVisionTasks(wasmPath) usually works if the loader is available.
-    // The previous code did manual fetch and eval. Let's keep it to be safe.
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
-      }
-      const loaderCode = await response.text();
-      (0, eval)(loaderCode);
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
-
+    await ensureVisionWasmFactory(wasmPath);
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    // const vision = {
-    //   wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
-    //   wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
-    // };
-
-    // Manual fetch to get buffer and report progress
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
 
-    if (currentOptions.delegate === 'GPU') {
-      console.warn('[Worker] GPU Delegate requested, but GPU delegate may be unstable in Web Worker depending on browser. Falling back to CPU if it crashes.');
+    let delegate: 'CPU' | 'GPU' = currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU';
+    if (delegate === 'GPU') {
+      console.warn('[Worker] GPU delegate requested, forcing CPU in worker context.');
+      delegate = 'CPU';
+      self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
     }
 
-    try {
-      objectDetector = await ObjectDetector.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetBuffer: new Uint8Array(modelBuffer),
-          delegate: currentOptions.delegate,
-        },
-        scoreThreshold: currentOptions.scoreThreshold,
-        maxResults: currentOptions.maxResults,
-        runningMode: currentOptions.runningMode,
-      });
-    } catch (finalError) {
-      console.error('ObjectDetector initialization failed:', finalError);
-      // Fallback to CPU if GPU fails
-      if (currentOptions.delegate === 'GPU') {
-        console.warn('GPU init failed, falling back to CPU', finalError);
-        self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-        objectDetector = await ObjectDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetBuffer: new Uint8Array(modelBuffer),
-            delegate: 'CPU',
-          },
-          scoreThreshold: currentOptions.scoreThreshold,
-          maxResults: currentOptions.maxResults,
-          runningMode: currentOptions.runningMode,
-        });
-      } else {
-        throw finalError;
-      }
-    }
+    objectDetector = await ObjectDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate,
+      },
+      scoreThreshold: currentOptions.scoreThreshold,
+      maxResults: currentOptions.maxResults,
+      runningMode: currentOptions.runningMode,
+    });
     self.postMessage({ type: 'INIT_DONE' });
 
   } catch (error: any) {
@@ -216,4 +183,36 @@ async function initDetector() {
   } finally {
     isInitializing = false;
   }
+}
+
+async function ensureVisionWasmFactory(wasmPath: string) {
+  if (typeof (self as any).ModuleFactory === 'function') {
+    return;
+  }
+
+  const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
+  const response = await fetch(wasmLoaderUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+  }
+
+  const loaderCode = await response.text();
+  const factory = (0, eval)(`${loaderCode}; ModuleFactory;`);
+  if (typeof factory !== 'function') {
+    throw new Error('Failed to initialize vision WASM ModuleFactory.');
+  }
+  (self as any).ModuleFactory = factory;
+}
+
+function bitmapToImageData(bitmap: ImageBitmap): ImageData {
+  if (!frameCanvas || frameCanvas.width !== bitmap.width || frameCanvas.height !== bitmap.height) {
+    frameCanvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  }
+  const ctx = frameCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) {
+    throw new Error('Failed to create 2D canvas context in worker.');
+  }
+  ctx.clearRect(0, 0, frameCanvas.width, frameCanvas.height);
+  ctx.drawImage(bitmap, 0, 0, frameCanvas.width, frameCanvas.height);
+  return ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height);
 }

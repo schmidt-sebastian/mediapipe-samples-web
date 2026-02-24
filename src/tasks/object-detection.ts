@@ -1,4 +1,4 @@
-import { ObjectDetectorResult } from '@mediapipe/tasks-vision';
+import { ObjectDetector, ObjectDetectorResult, FilesetResolver } from '@mediapipe/tasks-vision';
 
 let worker: Worker | undefined;
 let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
@@ -10,6 +10,10 @@ let lastVideoTimeSeconds = -1;
 let lastTimestampMs = -1;
 let animationFrameId: number;
 let isWorkerReady = false;
+let useMainThreadFallback = false;
+let mainThreadDetector: ObjectDetector | undefined;
+let mainThreadInitPromise: Promise<void> | null = null;
+let isWebGLSupported = true;
 
 // Options
 let currentModel = 'efficientdet_lite0';
@@ -32,6 +36,7 @@ export async function setupObjectDetection(container: HTMLElement) {
   canvasElement = document.getElementById('output_canvas') as HTMLCanvasElement;
   canvasCtx = canvasElement.getContext('2d')!;
   enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
+  isWebGLSupported = hasWebGLSupport();
 
   initWorker();
 
@@ -59,18 +64,21 @@ function handleWorkerMessage(event: MessageEvent) {
 
   switch (type) {
     case 'LOAD_PROGRESS':
-      const { progress } = event.data;
+      const { loaded, total, progress } = event.data;
       const progressContainer = document.getElementById('model-loading-progress');
       const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
       const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
 
       if (progressContainer && progressBar && progressText) {
         progressContainer.style.display = 'block';
-        const percent = Math.round(progress * 100);
+        const safeProgress = typeof progress === 'number'
+          ? progress
+          : (typeof loaded === 'number' && typeof total === 'number' && total > 0 ? loaded / total : 0);
+        const percent = Math.round(safeProgress * 100);
         progressBar.style.width = `${percent}%`;
         progressText.innerText = `Loading Model... ${percent}%`;
 
-        if (progress >= 1) {
+        if (safeProgress >= 1) {
           setTimeout(() => {
             progressContainer.style.display = 'none';
           }, 500);
@@ -79,6 +87,8 @@ function handleWorkerMessage(event: MessageEvent) {
       break;
 
     case 'INIT_DONE':
+      lastTimestampMs = -1;
+      lastVideoTimeSeconds = -1;
       document.querySelector('.viewport')?.classList.remove('loading-model');
       isWorkerReady = true;
       enableWebcamButton.disabled = false;
@@ -139,6 +149,7 @@ function handleWorkerMessage(event: MessageEvent) {
     case 'ERROR':
     case 'DETECT_ERROR':
       console.error('Worker error:', event.data.error);
+      void maybeSwitchToMainThreadFallback(event.data.error);
       updateStatus(`Error: ${event.data.error}`);
       break;
   }
@@ -154,6 +165,15 @@ function hideDropzone() {
 }
 
 async function initializeDetector() {
+  if (!isWebGLSupported) {
+    isWorkerReady = false;
+    document.querySelector('.viewport')?.classList.remove('loading-model');
+    enableWebcamButton.disabled = true;
+    enableWebcamButton.innerText = 'WebGL Required';
+    updateStatus('Object detection is unavailable: WebGL is not supported in this environment.');
+    return;
+  }
+
   // Check for delegate override in URL
   const urlParams = new URLSearchParams(window.location.search);
   const delegateParam = urlParams.get('delegate');
@@ -171,14 +191,15 @@ async function initializeDetector() {
   document.querySelector('.viewport')?.classList.add('loading-model');
   isWorkerReady = false;
 
+  if (useMainThreadFallback) {
+    await initializeMainThreadDetector();
+    return;
+  }
+
   // Tell worker to init
   // @ts-ignore
   const baseUrl = import.meta.env.BASE_URL;
-  let modelPath = models[currentModel];
-  if (!modelPath.startsWith('http')) {
-    modelPath = new URL(modelPath, new URL(baseUrl, window.location.origin)).href;
-  }
-
+  const modelPath = resolveModelPath(baseUrl);
   worker?.postMessage({
     type: 'INIT',
     modelAssetPath: modelPath,
@@ -209,10 +230,16 @@ function setupUI() {
       viewWebcam.classList.add('active');
       viewImage.classList.remove('active');
       runningMode = 'VIDEO';
-      worker?.postMessage({
-        type: 'SET_OPTIONS',
-        runningMode: 'VIDEO'
-      });
+      if (!isWebGLSupported) {
+        updateStatus('Object detection is unavailable: WebGL is not supported in this environment.');
+      } else if (useMainThreadFallback) {
+        void mainThreadDetector?.setOptions({ runningMode: 'VIDEO' });
+      } else {
+        worker?.postMessage({
+          type: 'SET_OPTIONS',
+          runningMode: 'VIDEO'
+        });
+      }
       enableCam();
     } else {
       tabWebcam.classList.remove('active');
@@ -220,10 +247,16 @@ function setupUI() {
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
       runningMode = 'IMAGE';
-      worker?.postMessage({
-        type: 'SET_OPTIONS',
-        runningMode: 'IMAGE'
-      });
+      if (!isWebGLSupported) {
+        updateStatus('Object detection is unavailable: WebGL is not supported in this environment.');
+      } else if (useMainThreadFallback) {
+        void mainThreadDetector?.setOptions({ runningMode: 'IMAGE' });
+      } else {
+        worker?.postMessage({
+          type: 'SET_OPTIONS',
+          runningMode: 'IMAGE'
+        });
+      }
       stopCam();
 
       // Trigger detection on current image immediately
@@ -318,7 +351,11 @@ function setupUI() {
   maxResultsInput.addEventListener('input', () => {
     maxResults = parseInt(maxResultsInput.value);
     maxResultsValue.innerText = maxResults.toString();
-    worker?.postMessage({ type: 'SET_OPTIONS', maxResults });
+    if (useMainThreadFallback) {
+      void mainThreadDetector?.setOptions({ maxResults });
+    } else {
+      worker?.postMessage({ type: 'SET_OPTIONS', maxResults });
+    }
     // Trigger re-detection if in image mode
     if (runningMode === 'IMAGE') {
       const testImage = document.getElementById('test-image') as HTMLImageElement;
@@ -333,7 +370,11 @@ function setupUI() {
   scoreThresholdInput.addEventListener('input', () => {
     scoreThreshold = parseFloat(scoreThresholdInput.value);
     scoreThresholdValue.innerText = scoreThreshold.toString();
-    worker?.postMessage({ type: 'SET_OPTIONS', scoreThreshold });
+    if (useMainThreadFallback) {
+      void mainThreadDetector?.setOptions({ scoreThreshold });
+    } else {
+      worker?.postMessage({ type: 'SET_OPTIONS', scoreThreshold });
+    }
     if (runningMode === 'IMAGE') {
       const testImage = document.getElementById('test-image') as HTMLImageElement;
       if (testImage && testImage.src && testImage.naturalWidth > 0) {
@@ -341,9 +382,6 @@ function setupUI() {
       }
     }
   });
-
-  // Webcam
-  enableWebcamButton.addEventListener('click', toggleCam);
 
   // Image Upload
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
@@ -403,12 +441,39 @@ function setupUI() {
 }
 
 async function detectImage(image: HTMLImageElement) {
-  if (!worker || !isWorkerReady) return;
+  if (!isWebGLSupported) {
+    updateStatus('Object detection is unavailable: WebGL is not supported in this environment.');
+    return;
+  }
+  if (!isWorkerReady) return;
 
   // Ensure running mode is IMAGE
   if (runningMode !== 'IMAGE') {
     runningMode = 'IMAGE';
   }
+
+  if (useMainThreadFallback) {
+    if (!mainThreadDetector) return;
+    try {
+      await mainThreadDetector.setOptions({ runningMode: 'IMAGE' });
+      const start = performance.now();
+      const detections = mainThreadDetector.detect(image);
+      const inferenceTime = performance.now() - start;
+      updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
+      updateInferenceTime(inferenceTime);
+      displayImageDetections(detections, image);
+    } catch (error: any) {
+      console.error('Main-thread detection error:', error);
+      if (String(error?.message || error).includes('activeTexture')) {
+        disableObjectDetection('Object detection is unavailable in this browser runtime (WebGL init failed).');
+        return;
+      }
+      updateStatus(`Error: ${error?.message || String(error)}`);
+    }
+    return;
+  }
+
+  if (!worker) return;
 
   const bitmap = await createImageBitmap(image);
   updateStatus(`Processing image...`);
@@ -455,11 +520,29 @@ function displayImageDetections(result: ObjectDetectorResult, image: HTMLImageEl
 }
 
 async function enableCam() {
-  if (!worker || video.srcObject) return;
+  if (!isWebGLSupported) {
+    updateStatus('Object detection is unavailable: WebGL is not supported in this environment.');
+    enableWebcamButton.innerText = 'WebGL Required';
+    enableWebcamButton.disabled = true;
+    return;
+  }
+  if ((!worker && !useMainThreadFallback) || video.srcObject) return;
 
   enableWebcamButton.innerText = 'Starting...';
   enableWebcamButton.disabled = true;
   const constraints = { video: true };
+
+  // Avoid noisy getUserMedia failures when no camera exists.
+  if (navigator.mediaDevices?.enumerateDevices) {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const hasVideoInput = devices.some((device) => device.kind === 'videoinput');
+    if (!hasVideoInput) {
+      updateStatus('No camera detected on this device.');
+      enableWebcamButton.innerText = 'Enable Webcam';
+      enableWebcamButton.disabled = false;
+      return;
+    }
+  }
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -478,13 +561,21 @@ async function enableCam() {
 
     // Make sure mode is VIDEO
     runningMode = 'VIDEO';
-    worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
+    if (useMainThreadFallback) {
+      await mainThreadDetector?.setOptions({ runningMode: 'VIDEO' });
+    } else {
+      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
+    }
     updateStatus('Webcam running...');
     enableWebcamButton.innerText = 'Disable Webcam';
     enableWebcamButton.disabled = false;
   } catch (err) {
-    console.error(err);
-    updateStatus('Camera error!');
+    if ((err as DOMException)?.name === 'NotFoundError') {
+      updateStatus('No camera detected on this device.');
+    } else {
+      console.error(err);
+      updateStatus('Camera error!');
+    }
     enableWebcamButton.innerText = 'Enable Webcam';
     enableWebcamButton.disabled = false;
   }
@@ -504,18 +595,21 @@ function stopCam() {
     const tracks = stream.getTracks();
     tracks.forEach((track) => track.stop());
     video.srcObject = null;
+    lastTimestampMs = -1;
+    lastVideoTimeSeconds = -1;
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
   }
 }
 
 async function predictWebcam() {
+  if (!isWebGLSupported) return;
   if (runningMode === 'IMAGE') {
     runningMode = 'VIDEO';
   }
 
-  // Wait for worker to finish initializing (e.g., during delegate or model switch)
-  if (!isWorkerReady || !worker) {
+  // Wait for detector to finish initializing (e.g., during delegate/model switch)
+  if (!isWorkerReady || (!worker && !useMainThreadFallback)) {
     animationFrameId = window.requestAnimationFrame(predictWebcam);
     return;
   }
@@ -523,31 +617,48 @@ async function predictWebcam() {
   if (video.currentTime !== lastVideoTimeSeconds) {
     lastVideoTimeSeconds = video.currentTime;
 
-    // We send the current frame to the worker. 
-    // The worker will request the next frame by telling us it's done via `DETECT_RESULT`
     try {
-      let bitmap: ImageBitmap;
-      if (navigator.webdriver) {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth || 640;
-        tempCanvas.height = video.videoHeight || 480;
-        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        bitmap = await window.createImageBitmap(tempCanvas);
+      if (useMainThreadFallback) {
+        if (!mainThreadDetector) {
+          animationFrameId = window.requestAnimationFrame(predictWebcam);
+          return;
+        }
+        const now = performance.now();
+        const timestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
+        lastTimestampMs = timestampMs;
+        const start = performance.now();
+        const detections = mainThreadDetector.detectForVideo(video, timestampMs);
+        const inferenceTime = performance.now() - start;
+        updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
+        updateInferenceTime(inferenceTime);
+        displayVideoDetections(detections);
+        if (video.srcObject && !video.paused) {
+          animationFrameId = window.requestAnimationFrame(predictWebcam);
+        }
       } else {
-        bitmap = await window.createImageBitmap(video);
+        let bitmap: ImageBitmap;
+        if (navigator.webdriver) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = video.videoWidth || 640;
+          tempCanvas.height = video.videoHeight || 480;
+          const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+          ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+          bitmap = await window.createImageBitmap(tempCanvas);
+        } else {
+          bitmap = await window.createImageBitmap(video);
+        }
+
+        // Ensure timestamps are monotonic
+        const now = performance.now();
+        const timestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
+        lastTimestampMs = timestampMs;
+
+        worker?.postMessage({
+          type: 'DETECT_VIDEO',
+          bitmap: bitmap,
+          timestampMs: timestampMs
+        }, [bitmap]);
       }
-
-      // Ensure timestamps are monotonic
-      const now = performance.now();
-      const timestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
-      lastTimestampMs = timestampMs;
-
-      worker?.postMessage({
-        type: 'DETECT_VIDEO',
-        bitmap: bitmap,
-        timestampMs: timestampMs
-      }, [bitmap]);
     } catch (e) {
       console.error("Failed to create ImageBitmap from video", e);
       // Try again next frame
@@ -641,12 +752,152 @@ export function cleanupObjectDetection() {
 
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
-    // We optionally terminate the worker or keep it alive, let's keep it alive for faster resumes, 
-    // but tell it to close the internal mediapipe instance
+    worker.terminate();
+    worker = undefined;
+  }
+
+  if (mainThreadDetector) {
+    mainThreadDetector.close();
+    mainThreadDetector = undefined;
   }
 
   // Also clear canvas
   if (canvasCtx && canvasElement) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   }
+}
+
+function resolveModelPath(baseUrl: string): string {
+  let modelPath = models[currentModel];
+  if (!modelPath.startsWith('http') && !modelPath.startsWith('blob:')) {
+    modelPath = new URL(modelPath, new URL(baseUrl, window.location.origin)).href;
+  }
+  return modelPath;
+}
+
+async function maybeSwitchToMainThreadFallback(error: string) {
+  if (!isWebGLSupported) return;
+  const message = String(error || '');
+  if (!message.includes('activeTexture') && !message.includes('WebGL')) {
+    return;
+  }
+
+  if (message.includes('activeTexture')) {
+    disableObjectDetection('Object detection is unavailable in this browser runtime (WebGL init failed).');
+    return;
+  }
+
+  if (useMainThreadFallback) return;
+
+  useMainThreadFallback = true;
+  currentDelegate = 'CPU';
+  updateStatus('Switching to main-thread CPU fallback...');
+  const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement | null;
+  if (delegateSelect) {
+    delegateSelect.value = 'CPU';
+  }
+
+  if (worker) {
+    try {
+      worker.postMessage({ type: 'CLEANUP' });
+    } catch { }
+    worker.terminate();
+    worker = undefined;
+  }
+  isWorkerReady = false;
+  await initializeMainThreadDetector();
+}
+
+async function initializeMainThreadDetector() {
+  if (!isWebGLSupported) return;
+  if (mainThreadInitPromise) {
+    await mainThreadInitPromise;
+    return;
+  }
+
+  mainThreadInitPromise = (async () => {
+    mainThreadDetector?.close();
+    mainThreadDetector = undefined;
+
+    // @ts-ignore
+    const baseUrl = import.meta.env.BASE_URL;
+    const wasmPath = new URL(`${baseUrl}wasm`, window.location.origin).href;
+    const vision = await FilesetResolver.forVisionTasks(wasmPath);
+    const modelAssetPath = resolveModelPath(baseUrl);
+
+    mainThreadDetector = await ObjectDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath,
+        delegate: 'CPU',
+      },
+      scoreThreshold,
+      maxResults,
+      runningMode,
+    });
+
+    isWorkerReady = true;
+    document.querySelector('.viewport')?.classList.remove('loading-model');
+    enableWebcamButton.disabled = false;
+    enableWebcamButton.innerText = video.srcObject ? 'Disable Webcam' : 'Enable Webcam';
+
+    const progress = document.getElementById('model-loading-progress');
+    if (progress) progress.style.display = 'none';
+
+    if (runningMode === 'IMAGE') {
+      const testImage = document.getElementById('test-image') as HTMLImageElement;
+      if (testImage && testImage.src && testImage.naturalWidth > 0) {
+        await detectImage(testImage);
+      }
+    } else if (runningMode === 'VIDEO' && video.srcObject) {
+      predictWebcam();
+    }
+  })();
+
+  try {
+    await mainThreadInitPromise;
+  } finally {
+    mainThreadInitPromise = null;
+  }
+}
+
+function hasWebGLSupport(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
+function disableObjectDetection(message: string) {
+  isWebGLSupported = false;
+  isWorkerReady = false;
+  useMainThreadFallback = false;
+
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+  }
+
+  if (video?.srcObject) {
+    const stream = video.srcObject as MediaStream;
+    stream.getTracks().forEach(track => track.stop());
+    video.srcObject = null;
+  }
+
+  if (worker) {
+    try {
+      worker.postMessage({ type: 'CLEANUP' });
+    } catch { }
+    worker.terminate();
+    worker = undefined;
+  }
+
+  if (mainThreadDetector) {
+    mainThreadDetector.close();
+    mainThreadDetector = undefined;
+  }
+
+  enableWebcamButton.disabled = true;
+  enableWebcamButton.innerText = 'Unavailable';
+  updateStatus(message);
 }

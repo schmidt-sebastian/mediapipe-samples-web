@@ -4,15 +4,10 @@ import {
   Detection,
 } from '@mediapipe/tasks-vision';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
+// MediaPipe's worker runtime expects self.import to exist in non-module workers.
+if (typeof (self as any).import !== 'function') {
+  (self as any).import = (url: string) => import(/* @vite-ignore */ url);
 }
-
-// MediaPipe Emscripten fallback
-// @ts-ignore
-self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
 let faceDetector: FaceDetector | undefined = undefined;
 let isInitializing = false;
@@ -20,6 +15,7 @@ let currentOptions: any = {};
 let basePath = '/';
 
 let isProcessing = false;
+let lastVideoTimestampMs = -1;
 
 self.onmessage = async (event) => {
   const { type } = event.data;
@@ -69,7 +65,9 @@ self.onmessage = async (event) => {
 
       try {
         if (requiredMode === 'VIDEO') {
-          detections = faceDetector.detectForVideo(bitmap, timestampMs);
+          const safeTimestampMs = timestampMs > lastVideoTimestampMs ? timestampMs : lastVideoTimestampMs + 1;
+          lastVideoTimestampMs = safeTimestampMs;
+          detections = faceDetector.detectForVideo(bitmap, safeTimestampMs);
         } else {
           detections = faceDetector.detect(bitmap);
         }
@@ -94,6 +92,7 @@ self.onmessage = async (event) => {
         faceDetector.close();
         faceDetector = undefined;
       }
+      lastVideoTimestampMs = -1;
       self.postMessage({ type: 'CLEANUP_DONE' });
     }
   } catch (error: any) {
@@ -106,8 +105,11 @@ self.onmessage = async (event) => {
 
 async function loadModel(path: string) {
   const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch model: ${response.status} ${response.statusText}`);
+  }
   const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
+  const contentLength = +(response.headers.get('Content-Length') || '0');
 
   if (!reader) {
     return await response.arrayBuffer();
@@ -149,41 +151,26 @@ async function initDetector() {
     }
 
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
+    await ensureVisionWasmFactory(wasmPath);
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
 
-    if (currentOptions.delegate === 'GPU') {
-      console.warn('[Worker] GPU Delegate requested.');
+    let delegate: 'CPU' | 'GPU' = currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU';
+    if (delegate === 'GPU') {
+      console.warn('[Worker] GPU delegate requested, forcing CPU in worker context.');
+      delegate = 'CPU';
+      self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
     }
 
-    try {
-      faceDetector = await FaceDetector.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetBuffer: new Uint8Array(modelBuffer),
-          delegate: currentOptions.delegate,
-        },
-        minDetectionConfidence: currentOptions.minDetectionConfidence,
-        minSuppressionThreshold: currentOptions.minSuppressionThreshold,
-        runningMode: currentOptions.runningMode,
-      });
-    } catch (finalError) {
-      console.error('FaceDetector initialization failed:', finalError);
-      if (currentOptions.delegate === 'GPU') {
-        console.warn('GPU init failed, falling back to CPU', finalError);
-        self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-        faceDetector = await FaceDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetBuffer: new Uint8Array(modelBuffer),
-            delegate: 'CPU',
-          },
-          minDetectionConfidence: currentOptions.minDetectionConfidence,
-          minSuppressionThreshold: currentOptions.minSuppressionThreshold,
-          runningMode: currentOptions.runningMode,
-        });
-      } else {
-        throw finalError;
-      }
-    }
+    faceDetector = await FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate,
+      },
+      minDetectionConfidence: currentOptions.minDetectionConfidence,
+      minSuppressionThreshold: currentOptions.minSuppressionThreshold,
+      runningMode: currentOptions.runningMode,
+    });
     self.postMessage({ type: 'INIT_DONE' });
 
   } catch (error: any) {
@@ -192,4 +179,23 @@ async function initDetector() {
   } finally {
     isInitializing = false;
   }
+}
+
+async function ensureVisionWasmFactory(wasmPath: string) {
+  if (typeof (self as any).ModuleFactory === 'function') {
+    return;
+  }
+
+  const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
+  const response = await fetch(wasmLoaderUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+  }
+
+  const loaderCode = await response.text();
+  const factory = (0, eval)(`${loaderCode}; ModuleFactory;`);
+  if (typeof factory !== 'function') {
+    throw new Error('Failed to initialize vision WASM ModuleFactory.');
+  }
+  (self as any).ModuleFactory = factory;
 }

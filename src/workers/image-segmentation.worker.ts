@@ -4,15 +4,10 @@ import {
   ImageSegmenterResult
 } from '@mediapipe/tasks-vision';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
+// MediaPipe's worker runtime expects self.import to exist in non-module workers.
+if (typeof (self as any).import !== 'function') {
+  (self as any).import = (url: string) => import(/* @vite-ignore */ url);
 }
-
-// MediaPipe Emscripten fallback
-// @ts-ignore
-self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
 let imageSegmenter: ImageSegmenter | undefined = undefined;
 let renderCanvas: OffscreenCanvas | undefined = undefined;
@@ -21,6 +16,7 @@ let currentOptions: any = {};
 let basePath = '/';
 
 let isProcessing = false;
+let lastVideoTimestampMs = -1;
 
 self.onmessage = async (event) => {
   const { type } = event.data;
@@ -125,7 +121,9 @@ self.onmessage = async (event) => {
 
       try {
         if (requiredMode === 'VIDEO') {
-          imageSegmenter.segmentForVideo(bitmap, timestampMs, callback);
+          const safeTimestampMs = timestampMs > lastVideoTimestampMs ? timestampMs : lastVideoTimestampMs + 1;
+          lastVideoTimestampMs = safeTimestampMs;
+          imageSegmenter.segmentForVideo(bitmap, safeTimestampMs, callback);
         } else {
           const result = imageSegmenter.segment(bitmap);
           callback(result);
@@ -141,6 +139,7 @@ self.onmessage = async (event) => {
         imageSegmenter.close();
         imageSegmenter = undefined;
       }
+      lastVideoTimestampMs = -1;
       self.postMessage({ type: 'CLEANUP_DONE' });
     }
   } catch (error: any) {
@@ -153,8 +152,11 @@ self.onmessage = async (event) => {
 
 async function loadModel(path: string) {
   const response = await fetch(path);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch model: ${response.status} ${response.statusText}`);
+  }
   const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
+  const contentLength = +(response.headers.get('Content-Length') || '0');
 
   if (!reader) {
     return await response.arrayBuffer();
@@ -196,53 +198,27 @@ async function initSegmenter() {
     }
 
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-
-    // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
-    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
-      }
-      const loaderCode = await response.text();
-      (0, eval)(loaderCode);
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
-
+    await ensureVisionWasmFactory(wasmPath);
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    // const vision = {
-    //   wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
-    //   wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
-    // };
-
-    // Manually fetch model to report progress
     const modelBuffer = await loadModel(currentOptions.modelAssetPath);
 
-    // Override options to use buffer
+    let delegate: 'CPU' | 'GPU' = currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU';
+    if (delegate === 'GPU') {
+      console.warn('[Worker] GPU delegate requested, forcing CPU in worker context.');
+      delegate = 'CPU';
+      self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
+    }
+
     const options = {
       baseOptions: {
         modelAssetBuffer: new Uint8Array(modelBuffer),
-        delegate: currentOptions.delegate,
+        delegate,
       },
       outputCategoryMask: true,
       outputConfidenceMasks: false,
       runningMode: currentOptions.runningMode
     };
-
-    try {
-      imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
-    } catch (error) {
-      // Fallback to CPU if GPU fails
-      console.warn('GPU init failed, falling back to CPU', error);
-      if (currentOptions.delegate === 'GPU') {
-        self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-        options.baseOptions.delegate = 'CPU';
-        imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
-      } else {
-        throw error;
-      }
-    }
+    imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
 
   } catch (error: any) {
     console.error("Image Segmentation Worker Init Error:", error);
@@ -250,4 +226,23 @@ async function initSegmenter() {
   } finally {
     isInitializing = false;
   }
+}
+
+async function ensureVisionWasmFactory(wasmPath: string) {
+  if (typeof (self as any).ModuleFactory === 'function') {
+    return;
+  }
+
+  const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
+  const response = await fetch(wasmLoaderUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
+  }
+
+  const loaderCode = await response.text();
+  const factory = (0, eval)(`${loaderCode}; ModuleFactory;`);
+  if (typeof factory !== 'function') {
+    throw new Error('Failed to initialize vision WASM ModuleFactory.');
+  }
+  (self as any).ModuleFactory = factory;
 }

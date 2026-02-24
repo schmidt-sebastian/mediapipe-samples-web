@@ -230,8 +230,21 @@ async function computeSimilarity(img1: HTMLImageElement, img2: HTMLImageElement)
 
   if (statusMessage) statusMessage.innerText = 'Computing...';
 
-  const bitmap1 = await createImageBitmap(img1);
-  const bitmap2 = await createImageBitmap(img2);
+  if (!img1.complete || !img2.complete || img1.naturalWidth === 0 || img2.naturalWidth === 0) {
+    if (statusMessage) statusMessage.innerText = 'Waiting for images to finish loading...';
+    return;
+  }
+
+  let bitmap1: ImageBitmap;
+  let bitmap2: ImageBitmap;
+  try {
+    bitmap1 = await createImageBitmap(img1);
+    bitmap2 = await createImageBitmap(img2);
+  } catch (error) {
+    console.error('Failed to create image bitmap for embedding:', error);
+    if (statusMessage) statusMessage.innerText = 'Invalid image input';
+    return;
+  }
 
   worker.postMessage({
     type: 'EMBED',
