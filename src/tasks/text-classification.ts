@@ -1,3 +1,4 @@
+// @ts-ignore
 import template from '../templates/text-classification.html?raw';
 
 let worker: Worker | undefined;

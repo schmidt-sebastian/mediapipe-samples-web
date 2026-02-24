@@ -1,14 +1,11 @@
+import { loadModel } from '../utils/model-loader';
 import {
   FaceDetector,
   FilesetResolver,
   Detection,
 } from '@mediapipe/tasks-vision';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
-}
+import { loadWasmModule } from '../utils/wasm-loader';
 
 // MediaPipe Emscripten fallback
 // @ts-ignore
@@ -104,39 +101,10 @@ self.onmessage = async (event) => {
   }
 };
 
-async function loadModel(path: string) {
-  const response = await fetch(path);
-  const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
 
-  if (!reader) {
-    return await response.arrayBuffer();
-  }
+// ... (rest of imports)
 
-  let receivedLength = 0;
-  const chunks = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    receivedLength += value.length;
-    self.postMessage({
-      type: 'LOAD_PROGRESS',
-      loaded: receivedLength,
-      total: contentLength
-    });
-  }
-
-  const chunksAll = new Uint8Array(receivedLength);
-  let position = 0;
-  for (let chunk of chunks) {
-    chunksAll.set(chunk, position);
-    position += chunk.length;
-  }
-
-  return chunksAll.buffer;
-}
+// (Deleted local loadModel function)
 
 async function initDetector() {
   if (isInitializing) return;
@@ -149,47 +117,52 @@ async function initDetector() {
     }
 
     const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-    const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    const modelBuffer = await loadModel(currentOptions.modelAssetPath);
+    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
 
-    if (currentOptions.delegate === 'GPU') {
-      console.warn('[Worker] GPU Delegate requested.');
-    }
+    // Inject the loader using our shared utility
+    await loadWasmModule(wasmLoaderUrl);
+
+    const vision = await FilesetResolver.forVisionTasks(wasmPath);
+
+    const modelBuffer = await loadModel(currentOptions.modelAssetPath, (loaded, total) => {
+      self.postMessage({
+        type: 'LOAD_PROGRESS',
+        loaded,
+        total
+      });
+    });
+
+    const options = {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate: (currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU') as 'CPU' | 'GPU',
+      },
+      minDetectionConfidence: currentOptions.minDetectionConfidence,
+      minSuppressionThreshold: currentOptions.minSuppressionThreshold,
+      runningMode: currentOptions.runningMode
+    };
 
     try {
-      faceDetector = await FaceDetector.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetBuffer: new Uint8Array(modelBuffer),
-          delegate: currentOptions.delegate,
-        },
-        minDetectionConfidence: currentOptions.minDetectionConfidence,
-        minSuppressionThreshold: currentOptions.minSuppressionThreshold,
-        runningMode: currentOptions.runningMode,
-      });
-    } catch (finalError) {
-      console.error('FaceDetector initialization failed:', finalError);
+      faceDetector = await FaceDetector.createFromOptions(vision, options);
+    } catch (error) {
+      console.warn('FaceDetector init failed, retrying with CPU fallback if needed', error);
       if (currentOptions.delegate === 'GPU') {
-        console.warn('GPU init failed, falling back to CPU', finalError);
         self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-        faceDetector = await FaceDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetBuffer: new Uint8Array(modelBuffer),
-            delegate: 'CPU',
-          },
-          minDetectionConfidence: currentOptions.minDetectionConfidence,
-          minSuppressionThreshold: currentOptions.minSuppressionThreshold,
-          runningMode: currentOptions.runningMode,
-        });
+        options.baseOptions.delegate = 'CPU';
+        faceDetector = await FaceDetector.createFromOptions(vision, options);
       } else {
-        throw finalError;
+        throw error;
       }
     }
+
     self.postMessage({ type: 'INIT_DONE' });
 
   } catch (error: any) {
     console.error("Face Detection Worker Init Error:", error);
-    throw error;
+    self.postMessage({ type: 'ERROR', error: error.message });
   } finally {
     isInitializing = false;
   }
 }
+
+

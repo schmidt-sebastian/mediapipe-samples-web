@@ -660,7 +660,8 @@ video {
   object-fit: contain;
   display: block;
   grid-area: 1 / 1;
-  z-index: 1;
+  z-index: 10;
+    position: relative;
 }
 
 .preview-container canvas {
@@ -670,9 +671,8 @@ video {
   /* Match image max-height */
   object-fit: contain;
   pointer-events: none;
-  opacity: 0.7;
   grid-area: 1 / 1;
-  z-index: 2;
+  z-index: 20;
   position: relative;
 }
 

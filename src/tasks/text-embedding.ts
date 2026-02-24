@@ -1,4 +1,7 @@
+// @ts-ignore
 import template from '../templates/text-embedding.html?raw';
+// @ts-ignore
+import TextEmbeddingWorker from '../workers/text-embedding.worker?worker';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
@@ -79,12 +82,12 @@ export async function setupTextEmbedding(container: HTMLElement) {
     });
   }
 
-  // @ts-ignore
-  import TextEmbeddingWorker from '../workers/text-embedding.worker?worker';
+
 
   // ... (inside class/function)
   if (!worker) {
     worker = new TextEmbeddingWorker();
+    worker!.onmessage = handleWorkerMessage;
   }
 
   await initEmbedder();

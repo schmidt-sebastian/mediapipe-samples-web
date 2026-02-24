@@ -6,11 +6,7 @@ import {
 
 const basePath = '/mediapipe-samples-web/';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
-}
+import { loadWasmModule } from '../utils/wasm-loader';
 
 let textEmbedder: TextEmbedder | undefined;
 let isInitializing = false;
@@ -21,38 +17,54 @@ type WorkerMessage =
   | { type: 'EMBED'; text1: string; text2?: string; timestampMs: number }
   | { type: 'CLEANUP' };
 
-async function loadModel(path: string) {
-  const response = await fetch(path);
-  const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
+import { loadModel } from '../utils/model-loader';
 
-  if (!reader) {
-    return await response.arrayBuffer();
-  }
+// ... (rest of imports)
 
-  let receivedLength = 0;
-  const chunks = [];
+// (Deleted local loadModel function)
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    receivedLength += value.length;
-    self.postMessage({
-      type: 'LOAD_PROGRESS',
-      loaded: receivedLength,
-      total: contentLength
+async function initEmbedder(data: any) {
+  if (isInitializing) return;
+  isInitializing = true;
+
+  try {
+    if (textEmbedder) {
+      textEmbedder.close();
+      textEmbedder = undefined;
+    }
+
+    const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
+    const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
+
+    // Inject the loader using our shared utility
+    await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;', true); // The 'true' indicates appendScript
+    // The local polyfill `self.createMediapipeTasksTextModule = factory;` is removed as loadWasmModule now handles appending.
+
+    const text = await FilesetResolver.forTextTasks(wasmPath);
+
+    const modelBuffer = await loadModel(data.modelAssetPath, (loaded, total) => {
+      self.postMessage({
+        type: 'LOAD_PROGRESS',
+        loaded,
+        total
+      });
     });
-  }
 
-  const chunksAll = new Uint8Array(receivedLength);
-  let position = 0;
-  for (let chunk of chunks) {
-    chunksAll.set(chunk, position);
-    position += chunk.length;
-  }
+    textEmbedder = await TextEmbedder.createFromOptions(text, {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
+      }
+    });
 
-  return chunksAll.buffer;
+    self.postMessage({ type: 'INIT_DONE' });
+
+  } catch (error: any) {
+    console.error("Text Embedder Init Error:", error);
+    self.postMessage({ type: 'ERROR', error: error.message });
+  } finally {
+    isInitializing = false;
+  }
 }
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
@@ -98,34 +110,4 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   }
 };
 
-async function initEmbedder(data: any) {
-  if (isInitializing) return;
-  isInitializing = true;
 
-  try {
-    if (textEmbedder) {
-      textEmbedder.close();
-      textEmbedder = undefined;
-    }
-
-    const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
-
-    const vision = await FilesetResolver.forTextTasks(wasmPath);
-    const modelBuffer = await loadModel(data.modelAssetPath);
-
-    textEmbedder = await TextEmbedder.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetBuffer: new Uint8Array(modelBuffer),
-        delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
-      }
-    });
-
-    self.postMessage({ type: 'INIT_DONE' });
-
-  } catch (error: any) {
-    console.error("Text Embedder Worker Init Error:", error);
-    self.postMessage({ type: 'ERROR', error: error.message });
-  } finally {
-    isInitializing = false;
-  }
-}

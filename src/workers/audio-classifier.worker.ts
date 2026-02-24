@@ -2,33 +2,23 @@ import {
   AudioClassifier,
   AudioClassifierResult
 } from '@mediapipe/tasks-audio';
-import {
-  FilesetResolver
-} from '@mediapipe/tasks-vision';
+import { loadModel } from '../utils/model-loader';
+import { loadWasmModule } from '../utils/wasm-loader';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
-}
-
-// MediaPipe Emscripten fallback
-// @ts-ignore
+// @ts-ignore: Pre-declare the factory MediaPipe will try to attach
 self.createMediapipeTasksAudioModule = self.createMediapipeTasksAudioModule || undefined;
 
 let audioClassifier: AudioClassifier | undefined = undefined;
 let isInitializing = false;
 let currentOptions: any = {};
 let basePath = '/';
-
 let isProcessing = false;
 
 self.onmessage = async (event) => {
   const { type } = event.data;
 
-  // Simple queue/lock
   while (isProcessing) {
-    await new Promise(resolve => setTimeout(() => resolve(true), 10));
+    await new Promise(resolve => setTimeout(resolve, 10));
   }
   isProcessing = true;
 
@@ -53,7 +43,6 @@ self.onmessage = async (event) => {
     } else if (type === 'CLASSIFY') {
       const { audioData, sampleRate } = event.data;
       if (!audioClassifier) {
-        console.warn('AudioClassifier not initialized yet.');
         self.postMessage({ type: 'CLASSIFY_ERROR', error: 'Not initialized' });
         return;
       }
@@ -69,11 +58,10 @@ self.onmessage = async (event) => {
         return;
       }
 
-      const inferenceTime = performance.now() - startTimeMs;
       self.postMessage({
         type: 'CLASSIFY_RESULT',
         results: results,
-        inferenceTime: inferenceTime
+        inferenceTime: performance.now() - startTimeMs
       });
     } else if (type === 'CLEANUP') {
       if (audioClassifier) {
@@ -90,40 +78,6 @@ self.onmessage = async (event) => {
   }
 };
 
-async function loadModel(path: string) {
-  const response = await fetch(path);
-  const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
-
-  if (!reader) {
-    return await response.arrayBuffer();
-  }
-
-  let receivedLength = 0;
-  const chunks = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    receivedLength += value.length;
-    self.postMessage({
-      type: 'LOAD_PROGRESS',
-      loaded: receivedLength,
-      total: contentLength
-    });
-  }
-
-  const chunksAll = new Uint8Array(receivedLength);
-  let position = 0;
-  for (let chunk of chunks) {
-    chunksAll.set(chunk, position);
-    position += chunk.length;
-  }
-
-  return chunksAll.buffer;
-}
-
 async function initClassifier() {
   if (isInitializing) return;
   isInitializing = true;
@@ -134,41 +88,24 @@ async function initClassifier() {
       audioClassifier = undefined;
     }
 
-    const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-    console.log(`Loading audio tasks from ${wasmPath}`);
+    const formattedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`;
+    const wasmPath = new URL(`${formattedBasePath}wasm`, self.location.origin).href.replace(/\/$/, '');
 
     // Fetch model manually for progress
-    const modelBuffer = await loadModel(currentOptions.modelAssetPath);
+    const modelBuffer = await loadModel(currentOptions.modelAssetPath, (loaded, total) => {
+      self.postMessage({ type: 'LOAD_PROGRESS', loaded, total });
+    });
 
-    // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
-    // We must manually fetch the WASM loader and eval it in the global scope.
-    const wasmLoaderUrl = `${wasmPath}/audio_wasm_internal.js`;
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
-      }
-      const loaderCode = await response.text();
-      (0, eval)(loaderCode);
-      console.log('Manually loaded audio_wasm_internal.js');
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
+    // 1. Inject the loader using our shared utility
+    await loadWasmModule(`${wasmPath}/audio_wasm_internal.js`);
 
-    let audioFileset;
-    // Check if FilesetResolver has forAudioTasks (it might not if imported from vision)
-    // @ts-ignore
-    if (typeof FilesetResolver.forAudioTasks === 'function') {
-      // @ts-ignore
-      audioFileset = await FilesetResolver.forAudioTasks(wasmPath);
-    } else {
-      console.warn('FilesetResolver.forAudioTasks missing, constructing manually');
-      audioFileset = {
-        wasmLoaderPath: `${wasmPath}/audio_wasm_internal.js`,
-        wasmBinaryPath: `${wasmPath}/audio_wasm_internal.wasm`
-      };
-    }
+    // 2. Hardcoded SIMD paths (Bypasses buggy FilesetResolver)
+    const audioFileset = {
+      wasmLoaderPath: `${wasmPath}/audio_wasm_internal.js`,
+      wasmBinaryPath: `${wasmPath}/audio_wasm_internal.wasm`
+    };
 
+    // 3. Initialize
     audioClassifier = await AudioClassifier.createFromOptions(audioFileset, {
       baseOptions: {
         modelAssetBuffer: new Uint8Array(modelBuffer),
@@ -177,7 +114,8 @@ async function initClassifier() {
       maxResults: currentOptions.maxResults,
       scoreThreshold: currentOptions.scoreThreshold
     });
-    console.log('AudioClassifier created');
+
+    console.log('AudioClassifier created successfully');
 
   } catch (e) {
     console.error('Worker initialization failed:', e);

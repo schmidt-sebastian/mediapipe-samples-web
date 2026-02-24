@@ -3,12 +3,10 @@ import {
   FilesetResolver,
   Detection,
 } from '@mediapipe/tasks-vision';
+import { loadModel } from '../utils/model-loader';
+import { loadWasmModule } from '../utils/wasm-loader';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
-}
+
 
 // MediaPipe Emscripten fallback
 // @ts-ignore
@@ -104,39 +102,11 @@ self.onmessage = async (event) => {
   }
 };
 
-async function loadModel(path: string) {
-  const response = await fetch(path);
-  const reader = response.body?.getReader();
-  const contentLength = +response.headers.get('Content-Length')!;
 
-  if (!reader) {
-    return await response.arrayBuffer();
-  }
 
-  let receivedLength = 0;
-  const chunks = [];
+// ...
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    receivedLength += value.length;
-    self.postMessage({
-      type: 'LOAD_PROGRESS',
-      loaded: receivedLength,
-      total: contentLength
-    });
-  }
-
-  const chunksAll = new Uint8Array(receivedLength);
-  let position = 0;
-  for (let chunk of chunks) {
-    chunksAll.set(chunk, position);
-    position += chunk.length;
-  }
-
-  return chunksAll.buffer;
-}
+// (Deleted local loadModel)
 
 async function initDetector() {
   if (isInitializing) return;
@@ -152,28 +122,21 @@ async function initDetector() {
 
     // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
     const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-    // We can just rely on FilesetResolver if we trust it, but keeping the manual fetch for consistency if needed.
-    // However, FilesetResolver.forVisionTasks(wasmPath) usually works if the loader is available.
-    // The previous code did manual fetch and eval. Let's keep it to be safe.
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
-      }
-      const loaderCode = await response.text();
-      (0, eval)(loaderCode);
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
+
+    // Inject the loader using our shared utility
+    await loadWasmModule(wasmLoaderUrl);
 
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    // const vision = {
-    //   wasmLoaderPath: `${wasmPath}/vision_wasm_internal.js`,
-    //   wasmBinaryPath: `${wasmPath}/vision_wasm_internal.wasm`
-    // };
 
     // Manual fetch to get buffer and report progress
-    const modelBuffer = await loadModel(currentOptions.modelAssetPath);
+    const modelBuffer = await loadModel(currentOptions.modelAssetPath, (loaded, total) => {
+      self.postMessage({
+        type: 'LOAD_PROGRESS',
+        loaded,
+        total
+      });
+    });
+
 
     if (currentOptions.delegate === 'GPU') {
       console.warn('[Worker] GPU Delegate requested, but GPU delegate may be unstable in Web Worker depending on browser. Falling back to CPU if it crashes.');

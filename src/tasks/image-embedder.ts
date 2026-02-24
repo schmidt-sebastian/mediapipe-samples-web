@@ -1,3 +1,4 @@
+// @ts-ignore
 import template from '../templates/image-embedder.html?raw';
 
 let worker: Worker | undefined;

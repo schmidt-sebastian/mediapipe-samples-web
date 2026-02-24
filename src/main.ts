@@ -5,6 +5,8 @@ import { setupAudioClassifier, cleanupAudioClassifier } from './tasks/audio-clas
 import { setupTextClassification, cleanupTextClassification } from './tasks/text-classification';
 import { setupTextEmbedding, cleanupTextEmbedding } from './tasks/text-embedding';
 import { setupFaceDetector, cleanupFaceDetector } from './tasks/face-detector';
+import { setupFaceLandmarker, cleanupFaceLandmarker } from './tasks/face-landmarker';
+import { setupHandLandmarker, cleanupHandLandmarker } from './tasks/hand-landmarker';
 import { setupLanguageDetector, cleanupLanguageDetector } from './tasks/language-detector';
 import { setupImageEmbedder, cleanupImageEmbedder } from './tasks/image-embedder';
 import { renderSidebar } from './ui/sidebar';
@@ -52,6 +54,8 @@ const mainContent = app.querySelector('.main-content') as HTMLElement;
 const routes = {
   '/vision/object_detector': { setup: setupObjectDetection, cleanup: cleanupObjectDetection, label: 'Object Detection' },
   '/vision/face_detector': { setup: setupFaceDetector, cleanup: cleanupFaceDetector, label: 'Face Detection' },
+  '/vision/face_landmarker': { setup: setupFaceLandmarker, cleanup: cleanupFaceLandmarker, label: 'Face Landmarker' },
+  '/vision/hand_landmarker': { setup: setupHandLandmarker, cleanup: cleanupHandLandmarker, label: 'Hand Landmarker' },
   '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
   '/vision/image_embedder': { setup: setupImageEmbedder, cleanup: cleanupImageEmbedder, label: 'Image Embedding' },
   '/audio/audio_classifier': { setup: setupAudioClassifier, cleanup: cleanupAudioClassifier, label: 'Audio Classifier' },

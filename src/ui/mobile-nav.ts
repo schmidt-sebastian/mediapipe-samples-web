@@ -4,10 +4,12 @@ export function renderMobileNav(container: HTMLElement) {
         <span class="material-icons" style="color: #007f8b; font-size: 24px;">analytics</span>
       </div>
       <select id="mobile-task-select" class="mobile-task-select">
-        <option value="#/vision/object_detector">Object Detection</option>
         <option value="#/vision/face_detector">Face Detection</option>
-        <option value="#/vision/image_segmenter">Image Segmentation</option>
+        <option value="#/vision/face_landmarker">Face Landmarker</option>
+        <option value="#/vision/hand_landmarker">Hand Landmarker</option>
         <option value="#/vision/image_embedder">Image Embedding</option>
+        <option value="#/vision/image_segmenter">Image Segmentation</option>
+        <option value="#/vision/object_detector">Object Detection</option>
         <option value="#/audio/audio_classifier">Audio Classifier</option>
         <option value="#/text/text_classifier">Text Classification</option>
         <option value="#/text/language_detector">Language Detection</option>
@@ -24,6 +26,12 @@ export function renderMobileNav(container: HTMLElement) {
     // For now, exact match or default
     if (hash.includes('image_segmenter')) {
       select.value = '#/vision/image_segmenter';
+    } else if (hash.includes('face_landmarker')) {
+      select.value = '#/vision/face_landmarker';
+    } else if (hash.includes('hand_landmarker')) {
+      select.value = '#/vision/hand_landmarker';
+    } else if (hash.includes('face_detector')) {
+      select.value = '#/vision/face_detector';
     } else if (hash.includes('audio_classifier')) {
       select.value = '#/audio/audio_classifier';
     } else if (hash.includes('text_classifier')) {

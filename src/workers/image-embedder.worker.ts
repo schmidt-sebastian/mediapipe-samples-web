@@ -1,3 +1,4 @@
+import { loadModel } from '../utils/model-loader';
 import {
   ImageEmbedder,
   FilesetResolver,
@@ -6,11 +7,7 @@ import {
 
 const basePath = '/mediapipe-samples-web/';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
-}
+import { loadWasmModule } from '../utils/wasm-loader';
 
 // MediaPipe Emscripten fallback
 // @ts-ignore
@@ -72,6 +69,12 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   }
 };
 
+
+
+// ... (imports)
+
+// (Deleted local loadModel)
+
 async function initEmbedder(data: any) {
   if (isInitializing) return;
   isInitializing = true;
@@ -85,19 +88,17 @@ async function initEmbedder(data: any) {
     const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
     const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
 
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch WASM loader: ${response.status} ${response.statusText}`);
-      }
-      const loaderCode = await response.text();
-      (0, eval)(loaderCode);
-    } catch (e) {
-      console.error('Failed to manually load WASM loader:', e);
-    }
+    // Inject the loader using our shared utility
+    await loadWasmModule(wasmLoaderUrl);
 
     const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    const modelBuffer = await loadModel(data.modelAssetPath);
+    const modelBuffer = await loadModel(data.modelAssetPath, (loaded, total) => {
+      self.postMessage({
+        type: 'LOAD_PROGRESS',
+        loaded,
+        total
+      });
+    });
 
     if (data.delegate === 'GPU') {
       console.warn('[Worker] GPU Delegate requested.');
@@ -136,36 +137,4 @@ async function initEmbedder(data: any) {
   }
 }
 
-async function loadModel(path: string) {
-    const response = await fetch(path);
-    const reader = response.body?.getReader();
-    const contentLength = +response.headers.get('Content-Length')!;
-  
-    if (!reader) {
-      return await response.arrayBuffer();
-    }
-  
-    let receivedLength = 0;
-    const chunks = [];
-  
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      receivedLength += value.length;
-      self.postMessage({
-        type: 'LOAD_PROGRESS',
-        loaded: receivedLength,
-        total: contentLength
-      });
-    }
-  
-    const chunksAll = new Uint8Array(receivedLength);
-    let position = 0;
-    for (let chunk of chunks) {
-      chunksAll.set(chunk, position);
-      position += chunk.length;
-    }
-  
-    return chunksAll.buffer;
-  }
+

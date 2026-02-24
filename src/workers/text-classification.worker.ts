@@ -2,14 +2,11 @@ import {
   TextClassifier,
   FilesetResolver
 } from '@mediapipe/tasks-text';
+import { loadModel } from '../utils/model-loader';
 
 const basePath = '/mediapipe-samples-web/';
 
-// @ts-ignore
-if (typeof self.import === 'undefined') {
-  // @ts-ignore
-  self.import = (url) => import(/* @vite-ignore */ url);
-}
+import { loadWasmModule } from '../utils/wasm-loader';
 
 let textClassifier: TextClassifier | undefined;
 let isInitializing = false;
@@ -63,41 +60,38 @@ async function initClassifier(data: any) {
     const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
 
     // Workaround for Vite + MediaPipe WASM loading in workers
+    // Workaround for Vite + MediaPipe WASM loading in workers
     const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
-    try {
-      const response = await fetch(wasmLoaderUrl);
-      if (response.ok) {
-        const loaderCode = await response.text();
-        const factory = (0, eval)(loaderCode + ';ModuleFactory;');
-        // @ts-ignore
-        self.createMediapipeTasksTextModule = factory;
-      }
-    } catch (e) {
-      console.error('Failed to manually load FWASM loader:', e);
-    }
+
+    // Inject the loader using our shared utility
+    const factory = await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
+    // @ts-ignore
+    self.createMediapipeTasksTextModule = factory;
+
+
+
+    // ...
 
     const vision = await FilesetResolver.forTextTasks(wasmPath);
 
-    // We can stick to standard loading since text models are usually small and less prone to the flatbuffer issue specific to some vision models?
-    // But let's fail fast if model is missing.
-    try {
-      const response = await fetch(data.modelAssetPath);
-      if (!response.ok) {
-        throw new Error(`Failed to load model from ${data.modelAssetPath}: ${response.status} ${response.statusText}`);
-      }
-    } catch (e) {
-      console.error("Model check failed", e);
-      throw e;
-    }
+    // Fetch model manually for progress reporting
+    const modelBuffer = await loadModel(data.modelAssetPath, (loaded, total) => {
+      self.postMessage({
+        type: 'LOAD_PROGRESS',
+        loaded,
+        total
+      });
+    });
 
     textClassifier = await TextClassifier.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: data.modelAssetPath,
+        modelAssetBuffer: new Uint8Array(modelBuffer),
         delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
       },
       maxResults: data.maxResults || 3,
       scoreThreshold: data.scoreThreshold || 0,
     });
+
 
     self.postMessage({ type: 'INIT_DONE' });
 

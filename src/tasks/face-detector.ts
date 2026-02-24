@@ -21,7 +21,10 @@ const models: Record<string, string> = {
   'blaze_face_short_range': 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'
 };
 
+// @ts-ignore
 import template from '../templates/face-detector.html?raw';
+// @ts-ignore
+import FaceDetectorWorker from '../workers/face-detector.worker.ts?worker';
 
 export async function setupFaceDetector(container: HTMLElement) {
   container.innerHTML = template;
@@ -38,7 +41,7 @@ export async function setupFaceDetector(container: HTMLElement) {
 
 function initWorker() {
   if (!worker) {
-    worker = new Worker(new URL('../workers/face-detector.worker.ts', import.meta.url), { type: 'classic' });
+    worker = new FaceDetectorWorker();
   }
   if (worker) {
     worker.onmessage = handleWorkerMessage;
@@ -524,24 +527,12 @@ function drawDetection(ctx: CanvasRenderingContext2D, detection: any, mirror: bo
   ctx.strokeRect(x, originY, width, height);
 
   // Draw landmarks if available
-  if (detection.keypoints) {
-    ctx.fillStyle = '#FF0000';
-    for (const keypoint of detection.keypoints) {
-      // const kx = keypoint.x * ctx.canvas.width;
-      // const ky = keypoint.y * ctx.canvas.height;
-      // Keypoints in FaceDetectorResult might be normalized or absolute? 
-      // Documentation says: NormalizedKeypoint? No, Detection has keypoints which are usually absolute if they come from standard detection?
-      // Wait, FaceDetectorResult detections are `Detection` which has `keypoints: NormalizedKeypoint[]`?
-      // Actually `Detection` in `tasks-vision` has `keypoints?: Keypoint[]` where Keypoint is `{x, y, score, name}` maybe?
-      // Let's check if they are normalized. 
-      // In ObjectDetector, we didn't use keypoints. 
-      // FaceDetector usually returns normalized keypoints for landmarks? 
-      // Actually, let's assume they are similar to bounding box (unnormalized) if coming from `detect`.
-      // But boundingBox is unnormalized.
-      // Let's safe check: if x < 1, assume normalized?
-      // Actually, let's just draw rect for now to be safe.
-    }
-  }
+  // if (detection.keypoints) {
+  //   ctx.fillStyle = '#FF0000';
+  //   for (const keypoint of detection.keypoints) {
+  //      // TODO: Implement keypoint drawing if needed
+  //   }
+  // }
 
   ctx.fillStyle = '#007f8b';
   ctx.font = '16px sans-serif';

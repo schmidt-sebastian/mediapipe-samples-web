@@ -23,6 +23,7 @@ const models: Record<string, string> = {
   'ssd_mobilenet_v2': 'https://storage.googleapis.com/mediapipe-models/object_detector/ssd_mobilenet_v2/float32/1/ssd_mobilenet_v2.tflite'
 };
 
+// @ts-ignore
 import template from '../templates/object-detection.html?raw';
 
 export async function setupObjectDetection(container: HTMLElement) {

@@ -1,3 +1,4 @@
+// @ts-ignore
 import template from '../templates/image-segmentation.html?raw';
 
 let segmentationWorker: Worker | undefined;

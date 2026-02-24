@@ -1,5 +1,9 @@
 import { AudioClassifierResult } from '@mediapipe/tasks-audio';
+// @ts-ignore
 import template from '../templates/audio-classifier.html?raw';
+
+// @ts-ignore
+import AudioClassifierWorker from '../workers/audio-classifier.worker.ts?worker';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
@@ -25,7 +29,7 @@ let waveformSnapshots: Float32Array[] = [];
 const MAX_SNAPSHOTS = 5;
 
 // @ts-ignore
-import AudioClassifierWorker from '../workers/audio-classifier.worker.ts?worker';
+// import AudioClassifierWorker from '../workers/audio-classifier.worker.ts?worker';
 
 export async function setupAudioClassifier(container: HTMLElement) {
   container.innerHTML = template;
