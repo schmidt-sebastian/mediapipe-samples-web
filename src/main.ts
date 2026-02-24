@@ -7,8 +7,12 @@ import { setupTextEmbedding, cleanupTextEmbedding } from './tasks/text-embedding
 import { setupFaceDetector, cleanupFaceDetector } from './tasks/face-detector';
 import { setupFaceLandmarker, cleanupFaceLandmarker } from './tasks/face-landmarker';
 import { setupHandLandmarker, cleanupHandLandmarker } from './tasks/hand-landmarker';
+import { setupPoseLandmarker, cleanupPoseLandmarker } from './tasks/pose-landmarker';
+import { setupGestureRecognizer, cleanupGestureRecognizer } from './tasks/gesture-recognizer';
 import { setupLanguageDetector, cleanupLanguageDetector } from './tasks/language-detector';
 import { setupImageEmbedder, cleanupImageEmbedder } from './tasks/image-embedder';
+import { setupInteractiveSegmenter, cleanupInteractiveSegmenter } from './tasks/interactive-segmenter';
+import { setupHolisticLandmarker, cleanupHolisticLandmarker } from './tasks/holistic-landmarker';
 import { renderSidebar } from './ui/sidebar';
 import { renderMobileNav } from './ui/mobile-nav';
 
@@ -56,6 +60,11 @@ const routes = {
   '/vision/face_detector': { setup: setupFaceDetector, cleanup: cleanupFaceDetector, label: 'Face Detection' },
   '/vision/face_landmarker': { setup: setupFaceLandmarker, cleanup: cleanupFaceLandmarker, label: 'Face Landmarker' },
   '/vision/hand_landmarker': { setup: setupHandLandmarker, cleanup: cleanupHandLandmarker, label: 'Hand Landmarker' },
+  '/vision/pose_landmarker': { setup: setupPoseLandmarker, cleanup: cleanupPoseLandmarker, label: 'Pose Landmarker' },
+  '/vision/holistic_landmarker': { setup: setupHolisticLandmarker, cleanup: cleanupHolisticLandmarker, label: 'Holistic Landmarker' },
+
+  '/vision/gesture_recognizer': { setup: setupGestureRecognizer, cleanup: cleanupGestureRecognizer, label: 'Gesture Recognizer' },
+  '/vision/interactive_segmenter': { setup: setupInteractiveSegmenter, cleanup: cleanupInteractiveSegmenter, label: 'Interactive Segmenter' },
   '/vision/image_segmenter': { setup: setupImageSegmentation, cleanup: cleanupImageSegmentation, label: 'Image Segmentation' },
   '/vision/image_embedder': { setup: setupImageEmbedder, cleanup: cleanupImageEmbedder, label: 'Image Embedding' },
   '/audio/audio_classifier': { setup: setupAudioClassifier, cleanup: cleanupAudioClassifier, label: 'Audio Classifier' },

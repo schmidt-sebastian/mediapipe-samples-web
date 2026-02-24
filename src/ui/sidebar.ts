@@ -13,7 +13,11 @@ export function renderSidebar(container: HTMLElement) {
         <li><a href="#/vision/face_detector" class="nav-button" data-task="face-detector">Face Detection</a></li>
         <li><a href="#/vision/face_landmarker" class="nav-button" data-task="face-landmarker">Face Landmarker</a></li>
         <li><a href="#/vision/hand_landmarker" class="nav-button" data-task="hand-landmarker">Hand Landmarker</a></li>
+        <li><a href="#/vision/pose_landmarker" class="nav-button" data-task="pose-landmarker">Pose Landmarker</a></li>
+        <li><a href="#/vision/holistic_landmarker" class="nav-button" data-task="holistic-landmarker">Holistic Landmarker</a></li>
+        <li><a href="#/vision/gesture_recognizer" class="nav-button" data-task="gesture-recognizer">Gesture Recognizer</a></li>
         <li><a href="#/vision/image_embedder" class="nav-button" data-task="image-embedder">Image Embedding</a></li>
+        <li><a href="#/vision/interactive_segmenter" class="nav-button" data-task="interactive-segmenter">Interactive Segmenter</a></li>
         <li><a href="#/vision/image_segmenter" class="nav-button" data-task="image-segmentation">Image Segmentation</a></li>
         <li><a href="#/vision/object_detector" class="nav-button" data-task="object-detection">Object Detection</a></li>
       </ul>

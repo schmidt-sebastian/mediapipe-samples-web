@@ -1,0 +1,54 @@
+<div class="model-settings-control">
+  <div id="status-message" class="status-msg">Initializing...</div>
+  <div id="inference-time" class="status-msg">Inference Time: 0ms</div>
+  
+  <div class="tabs">
+    <div class="tab active" id="tab-model-list">Pre-trained Models</div>
+    <div class="tab" id="tab-model-upload" style="display: none;">Upload Model</div>
+  </div>
+
+  <div class="tab-content">
+    <div id="view-model-list" class="active">
+      <div class="control-group">
+        <label>
+          Model Selection
+          <select id="model-select">
+            <option value="magic_touch" selected>Magic Touch (Default)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="control-group">
+    <label>
+      Delegate
+      <select id="delegate-select">
+        <option value="GPU">GPU</option>
+        <option value="CPU">CPU</option>
+      </select>
+    </label>
+  </div>
+  
+  <div class="instructions">
+    <p><strong>Instructions:</strong> Click on an object in the image to segment it.</p>
+  </div>
+</div>
+
+<div class="image-mode-control">
+  <div class="view-content">
+    <div id="view-image" class="active">
+      <div class="upload-dropzone">
+        <div class="dropzone-content">
+          <span class="icon">📁</span>
+          <span>Drag & Drop or Click to Upload</span>
+        </div>
+        <input type="file" id="image-upload" accept="image/*">
+      </div>
+      <div id="image-preview-container" class="preview-container">
+        <img id="test-image" src="cat.png" crossorigin="anonymous" />
+        <canvas id="output_canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
