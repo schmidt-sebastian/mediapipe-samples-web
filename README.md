@@ -2,29 +2,28 @@
 
 Experience the power of on-device Machine Learning with MediaPipe Tasks Vision. This demo showcases real-time Object Detection and Image Segmentation running entirely in your browser using WebGL2 acceleration.
 
-![Screenshot](file:///Users/mrschmidt/.gemini/jetski/brain/6dc85e9d-ef5a-4915-be6a-69b171d8c4bc/image_segmentation_webcam_working_1770841181049.png)
+## Supported Tasks
 
-## Features
+### Vision
+- **Face Detection**: Detect faces in images and video.
+- **Face Landmarker**: Detect 478 3D face landmarks.
+- **Gesture Recognizer**: Recognize hand gestures (e.g., "Thumbs Up", "Peace").
+- **Hand Landmarker**: Track 21 3D hand landmarks for both hands.
+- **Holistic Landmarker**: Simultaneous tracking of face, hands, and pose.
+- **Image Classifier**: Categorize images into defined classes.
+- **Image Embedding**: Compare image similarity using vector embeddings.
+- **Image Segmentation**: Pixel-perfect masking of objects.
+- **Interactive Segmentation**: Click to segment specific objects of interest.
+- **Object Detection**: Detect multiple objects with bounding boxes.
+- **Pose Landmarker**: Full-body pose tracking with segmentation support.
 
-### 🚀 High Performance
-- **GPU Acceleration**: Utilizes WebGL2 for smooth, real-time performance.
-- **Privacy First**: All processing happens locally on your device. No images are sent to the cloud.
+### Audio
+- **Audio Classifier**: Classify ambient sounds in real-time.
 
-### 👁️ Object Detection
-- **State-of-the-Art Models**: Choose from EfficientDet-Lite0, Lite2, and SSD MobileNetV2.
-- **Custom Models**: Upload your own TFLite models for specialized detection tasks.
-- **Real-time Feedback**: View confidence scores and bounding boxes instantly.
-- **Instant Demo**: Pre-loaded with a sample image (`dog_fluffy.jpg`) so you can see it in action immediately.
-
-### 🎨 Image Segmentation
-- **Precise Masks**: Generate pixel-perfect category masks for objects.
-- **Confidence Visualization**: Inspect confidence heatmaps to understand model certainty.
-- **Flexible Inputs**: Works seamlessly with both Webcam feed and static images.
-- **Instant Demo**: Pre-loaded with a sample image (`dog_fluffy.jpg`) for immediate testing.
-
-### 📱 Responsive Design
-- **Mobile Friendly**: Fully responsive interface that adapts to your device.
-- **Deep Linking**: Share specific tasks easily with hash-based routing (e.g., `#/vision/object_detector`).
+### Text
+- **Language Detection**: Identify the language of input text.
+- **Text Classification**: Classify text sentiment (positive/negative).
+- **Text Embedding**: Semantic similarity comparison for text.
 
 ## Quick Start
 
@@ -40,5 +39,3 @@ We ensure robustness with a comprehensive End-to-End (E2E) test suite using Play
 ```bash
 npx playwright test
 ```
-
-*Tests verify navigation, inference accuracy using standard test images, and UI responsiveness.*

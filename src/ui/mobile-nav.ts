@@ -9,6 +9,7 @@ export function renderMobileNav(container: HTMLElement) {
         <option value="#/vision/hand_landmarker">Hand Landmarker</option>
         <option value="#/vision/pose_landmarker">Pose Landmarker</option>
         <option value="#/vision/holistic_landmarker">Holistic Landmarker</option>
+  <option value="#/vision/image_classifier">Image Classifier</option>
         <option value="#/vision/gesture_recognizer">Gesture Recognizer</option>
         <option value="#/vision/image_embedder">Image Embedding</option>
         <option value="#/vision/interactive_segmenter">Interactive Segmenter</option>
@@ -38,6 +39,10 @@ export function renderMobileNav(container: HTMLElement) {
       select.value = '#/vision/hand_landmarker';
     } else if (hash.includes('pose_landmarker')) {
       select.value = '#/vision/pose_landmarker';
+    } else if (hash.includes('holistic_landmarker')) {
+      select.value = '#/vision/holistic_landmarker';
+    } else if (hash.includes('image_classifier')) {
+      select.value = '#/vision/image_classifier';
     } else if (hash.includes('gesture_recognizer')) {
       select.value = '#/vision/gesture_recognizer';
     } else if (hash.includes('face_detector')) {

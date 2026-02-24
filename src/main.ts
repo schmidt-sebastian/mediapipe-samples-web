@@ -12,7 +12,7 @@ import { setupGestureRecognizer, cleanupGestureRecognizer } from './tasks/gestur
 import { setupLanguageDetector, cleanupLanguageDetector } from './tasks/language-detector';
 import { setupImageEmbedder, cleanupImageEmbedder } from './tasks/image-embedder';
 import { setupInteractiveSegmenter, cleanupInteractiveSegmenter } from './tasks/interactive-segmenter';
-import { setupHolisticLandmarker, cleanupHolisticLandmarker } from './tasks/holistic-landmarker';
+
 import { renderSidebar } from './ui/sidebar';
 import { renderMobileNav } from './ui/mobile-nav';
 
@@ -61,7 +61,28 @@ const routes = {
   '/vision/face_landmarker': { setup: setupFaceLandmarker, cleanup: cleanupFaceLandmarker, label: 'Face Landmarker' },
   '/vision/hand_landmarker': { setup: setupHandLandmarker, cleanup: cleanupHandLandmarker, label: 'Hand Landmarker' },
   '/vision/pose_landmarker': { setup: setupPoseLandmarker, cleanup: cleanupPoseLandmarker, label: 'Pose Landmarker' },
-  '/vision/holistic_landmarker': { setup: setupHolisticLandmarker, cleanup: cleanupHolisticLandmarker, label: 'Holistic Landmarker' },
+  '/vision/holistic_landmarker': {
+    setup: async (el: HTMLElement) => {
+      const { setupHolisticLandmarker } = await import('./tasks/holistic-landmarker');
+      await setupHolisticLandmarker(el);
+    },
+    cleanup: async () => {
+      const { cleanupHolisticLandmarker } = await import('./tasks/holistic-landmarker');
+      cleanupHolisticLandmarker();
+    },
+    label: 'Holistic Landmarker'
+  },
+  '/vision/image_classifier': {
+    setup: async (el: HTMLElement) => {
+      const { setupImageClassifier } = await import('./tasks/image-classifier');
+      await setupImageClassifier(el);
+    },
+    cleanup: async () => {
+      const { cleanupImageClassifier } = await import('./tasks/image-classifier');
+      cleanupImageClassifier();
+    },
+    label: 'Image Classifier'
+  },
 
   '/vision/gesture_recognizer': { setup: setupGestureRecognizer, cleanup: cleanupGestureRecognizer, label: 'Gesture Recognizer' },
   '/vision/interactive_segmenter': { setup: setupInteractiveSegmenter, cleanup: cleanupInteractiveSegmenter, label: 'Interactive Segmenter' },

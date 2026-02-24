@@ -1,16 +1,8 @@
-import {
-  HolisticLandmarkerResult,
-  DrawingUtils,
-  FaceLandmarker,
-  PoseLandmarker,
-  HandLandmarker
-} from '@mediapipe/tasks-vision';
+import { ImageClassifierResult } from '@mediapipe/tasks-vision';
 
 let worker: Worker | undefined;
 let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
 let video: HTMLVideoElement;
-let canvasElement: HTMLCanvasElement;
-let canvasCtx: CanvasRenderingContext2D;
 let enableWebcamButton: HTMLButtonElement;
 let lastVideoTimeSeconds = -1;
 let lastTimestampMs = -1;
@@ -18,35 +10,36 @@ let animationFrameId: number;
 let isWorkerReady = false;
 
 // Options
-let currentModel = 'holistic_landmarker_lite';
+let currentModel = 'efficientnet_lite0';
 let currentDelegate: 'CPU' | 'GPU' = 'GPU';
+let maxResults = 3;
+let scoreThreshold = 0.0;
 
 const models: Record<string, string> = {
-  'holistic_landmarker_lite': 'https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task',
+  'efficientnet_lite0': 'https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite0/float32/1/efficientnet_lite0.tflite',
+  'efficientnet_lite2': 'https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite2/float32/1/efficientnet_lite2.tflite'
 };
 
 // @ts-ignore
-import template from '../templates/holistic-landmarker.html?raw';
+import template from '../templates/image-classifier.html?raw';
 
-export async function setupHolisticLandmarker(container: HTMLElement) {
+export async function setupImageClassifier(container: HTMLElement) {
   container.innerHTML = template;
 
   video = document.getElementById('webcam') as HTMLVideoElement;
-  canvasElement = document.getElementById('output_canvas') as HTMLCanvasElement;
-  canvasCtx = canvasElement.getContext('2d')!;
   enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
 
   initWorker();
   setupUI();
-  await initializeDetector();
+  await initializeClassifier();
 }
 
 // @ts-ignore
-import HolisticLandmarkerWorker from '../workers/holistic-landmarker.worker.ts?worker';
+import ImageClassifierWorker from '../workers/image-classifier.worker.ts?worker';
 
 function initWorker() {
   if (!worker) {
-    worker = new HolisticLandmarkerWorker();
+    worker = new ImageClassifierWorker();
   }
   if (worker) {
     worker.onmessage = handleWorkerMessage;
@@ -71,20 +64,20 @@ function handleWorkerMessage(event: MessageEvent) {
       } else if (runningMode === 'IMAGE') {
         const testImage = document.getElementById('test-image') as HTMLImageElement;
         if (testImage.style.display !== 'none' && testImage.src) {
-          triggerImageDetection(testImage);
+          triggerImageClassification(testImage);
         }
       }
       break;
 
-    case 'DETECT_RESULT':
+    case 'CLASSIFY_RESULT':
       const { mode, result, inferenceTime } = event.data;
       updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
       updateInferenceTime(inferenceTime);
 
       if (mode === 'IMAGE') {
-        displayImageResult(result);
+        displayResult(result);
       } else if (mode === 'VIDEO') {
-        displayVideoResult(result);
+        displayResult(result);
         if (video.srcObject && !video.paused) {
           animationFrameId = window.requestAnimationFrame(predictWebcam);
         }
@@ -98,19 +91,19 @@ function handleWorkerMessage(event: MessageEvent) {
   }
 }
 
-function triggerImageDetection(image: HTMLImageElement) {
+function triggerImageClassification(image: HTMLImageElement) {
   if (image.complete && image.naturalWidth > 0) {
-    detectImage(image);
+    classifyImage(image);
   } else {
     image.onload = () => {
       if (image.naturalWidth > 0) {
-        detectImage(image);
+        classifyImage(image);
       }
     };
   }
 }
 
-async function initializeDetector() {
+async function initializeClassifier() {
   enableWebcamButton.disabled = true;
   if (!video.srcObject) {
     enableWebcamButton.innerText = 'Initializing...';
@@ -128,6 +121,8 @@ async function initializeDetector() {
     modelAssetPath: modelPath,
     delegate: currentDelegate,
     runningMode,
+    maxResults,
+    scoreThreshold,
     baseUrl
   });
 }
@@ -159,7 +154,7 @@ function setupUI() {
 
       if (isWorkerReady) {
         const testImage = document.getElementById('test-image') as HTMLImageElement;
-        if (testImage && testImage.src) triggerImageDetection(testImage);
+        if (testImage && testImage.src) triggerImageClassification(testImage);
       }
     }
   };
@@ -176,15 +171,33 @@ function setupUI() {
   const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
   modelSelect.addEventListener('change', async () => {
     currentModel = modelSelect.value;
-    await initializeDetector();
+    await initializeClassifier();
   });
 
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
   delegateSelect.addEventListener('change', async () => {
     currentDelegate = delegateSelect.value as 'GPU' | 'CPU';
-    await initializeDetector();
+    await initializeClassifier();
   });
   delegateSelect.value = currentDelegate;
+
+  const maxResultsInput = document.getElementById('max-results') as HTMLInputElement;
+  const maxResultsValue = document.getElementById('max-results-value')!;
+  maxResultsInput.addEventListener('input', () => {
+    maxResults = parseInt(maxResultsInput.value);
+    maxResultsValue.innerText = maxResults.toString();
+    worker?.postMessage({ type: 'SET_OPTIONS', maxResults });
+    if (runningMode === 'IMAGE') reRunImageClassification();
+  });
+
+  const scoreThresholdInput = document.getElementById('score-threshold') as HTMLInputElement;
+  const scoreThresholdValue = document.getElementById('score-threshold-value')!;
+  scoreThresholdInput.addEventListener('input', () => {
+    scoreThreshold = parseInt(scoreThresholdInput.value) / 100;
+    scoreThresholdValue.innerText = `${parseInt(scoreThresholdInput.value)}%`;
+    worker?.postMessage({ type: 'SET_OPTIONS', scoreThreshold });
+    if (runningMode === 'IMAGE') reRunImageClassification();
+  });
 
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   const imagePreviewContainer = document.getElementById('image-preview-container')!;
@@ -208,88 +221,60 @@ function setupUI() {
         const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
         if (dropzoneContent) dropzoneContent.style.display = 'none';
 
-        triggerImageDetection(testImage);
+        triggerImageClassification(testImage);
       };
       reader.readAsDataURL(file);
     }
   });
 }
 
-async function detectImage(image: HTMLImageElement) {
+function reRunImageClassification() {
+  const testImage = document.getElementById('test-image') as HTMLImageElement;
+  if (testImage && testImage.src && testImage.naturalWidth > 0) {
+    classifyImage(testImage);
+  }
+}
+
+async function classifyImage(image: HTMLImageElement) {
   if (!worker || !isWorkerReady) return;
   if (runningMode !== 'IMAGE') runningMode = 'IMAGE';
 
   const bitmap = await createImageBitmap(image);
   updateStatus(`Processing image...`);
   worker.postMessage({
-    type: 'DETECT_IMAGE',
+    type: 'CLASSIFY_IMAGE',
     bitmap: bitmap,
     timestampMs: performance.now()
   }, [bitmap]);
 }
 
-function displayImageResult(result: HolisticLandmarkerResult) {
-  const imageCanvas = document.getElementById('image-canvas') as HTMLCanvasElement;
-  const testImage = document.getElementById('test-image') as HTMLImageElement;
-  const ctx = imageCanvas.getContext('2d')!;
+function displayResult(result: ImageClassifierResult) {
+  const resultsContainer = document.getElementById('classification-results');
+  if (!resultsContainer) return;
 
-  imageCanvas.width = testImage.naturalWidth;
-  imageCanvas.height = testImage.naturalHeight;
-  imageCanvas.style.width = '100%';
-  imageCanvas.style.height = 'auto';
-
-  ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
-
-  drawResults(ctx, result);
-}
-
-function displayVideoResult(result: HolisticLandmarkerResult) {
-  canvasElement.width = video.videoWidth;
-  canvasElement.height = video.videoHeight;
-  canvasCtx.save();
-  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-  drawResults(canvasCtx, result);
-  canvasCtx.restore();
-}
-
-function drawResults(ctx: CanvasRenderingContext2D, result: HolisticLandmarkerResult) {
-  const drawingUtils = new DrawingUtils(ctx);
-
-  // Face Landmarks
-  if (result.faceLandmarks && result.faceLandmarks.length > 0) {
-    for (const landmarks of result.faceLandmarks) {
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_TESSELATION, { color: '#C0C0C070', lineWidth: 1 });
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, { color: '#FF3030' });
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW, { color: '#FF3030' });
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, { color: '#30FF30' });
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW, { color: '#30FF30' });
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_LIPS, { color: '#E0E0E0' });
-      drawingUtils.drawConnectors(landmarks, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL, { color: '#E0E0E0' });
+  resultsContainer.innerHTML = '';
+  
+  if (result.classifications && result.classifications.length > 0) {
+    const categories = result.classifications[0].categories;
+    
+    if (categories.length === 0) {
+      resultsContainer.innerHTML = '<div class="no-results">No categories found matching criteria</div>';
+      return;
     }
-  }
 
-  // Pose Landmarks
-  if (result.poseLandmarks && result.poseLandmarks.length > 0) {
-    for (const landmarks of result.poseLandmarks) {
-      drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#FFFFFF' });
-      drawingUtils.drawLandmarks(landmarks, { color: '#FF0000', radius: 1 });
-    }
-  }
-
-  // Hand Landmarks
-  if (result.leftHandLandmarks && result.leftHandLandmarks.length > 0) {
-    for (const landmarks of result.leftHandLandmarks) {
-      drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: '#CC0000', lineWidth: 5 });
-      drawingUtils.drawLandmarks(landmarks, { color: '#00FF00', lineWidth: 2 });
-    }
-  }
-
-  if (result.rightHandLandmarks && result.rightHandLandmarks.length > 0) {
-    for (const landmarks of result.rightHandLandmarks) {
-      drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: '#00CC00', lineWidth: 5 });
-      drawingUtils.drawLandmarks(landmarks, { color: '#FF0000', lineWidth: 2 });
-    }
+    categories.forEach(category => {
+      const scorePercent = Math.round(category.score * 100);
+      const row = document.createElement('div');
+      row.className = 'classification-row';
+      row.innerHTML = `
+        <div class="category-name">${category.categoryName || 'Unknown'}</div>
+        <div class="score-container">
+          <div class="score-bar" style="width: ${scorePercent}%"></div>
+          <div class="score-text">${scorePercent}%</div>
+        </div>
+      `;
+      resultsContainer.appendChild(row);
+    });
   }
 }
 
@@ -370,7 +355,7 @@ async function predictWebcam() {
       lastTimestampMs = timestampMs;
 
       worker.postMessage({
-        type: 'DETECT_VIDEO',
+        type: 'CLASSIFY_VIDEO',
         bitmap: bitmap,
         timestampMs: timestampMs
       }, [bitmap]);
@@ -393,7 +378,7 @@ function updateInferenceTime(time: number) {
   if (el) el.innerText = `Inference Time: ${time.toFixed(2)} ms`;
 }
 
-export function cleanupHolisticLandmarker() {
+export function cleanupImageClassifier() {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   stopCam();
   if (worker) {
@@ -402,5 +387,4 @@ export function cleanupHolisticLandmarker() {
     worker = undefined;
   }
   isWorkerReady = false;
-  if (canvasCtx && canvasElement) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 }

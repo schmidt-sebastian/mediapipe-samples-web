@@ -13,7 +13,8 @@
         <label>
           Model Selection
           <select id="model-select">
-            <option value="holistic_landmarker_lite" selected>Holistic Landmarker (Default)</option>
+            <option value="efficientnet_lite0" selected>EfficientNet-Lite0</option>
+            <option value="efficientnet_lite2">EfficientNet-Lite2</option>
           </select>
         </label>
       </div>
@@ -29,8 +30,26 @@
       </select>
     </label>
   </div>
-  
-  <!-- Add more sliders if needed (minFaceDetectionConfidence etc.), keeping it simple for now -->
+
+  <div class="control-group">
+    <label>
+      Max Results
+      <div class="slider-container">
+        <input type="range" id="max-results" min="1" max="10" step="1" value="3">
+        <span id="max-results-value" class="value-display">3</span>
+      </div>
+    </label>
+  </div>
+
+  <div class="control-group">
+    <label>
+      Score Threshold
+      <div class="slider-container">
+        <input type="range" id="score-threshold" min="0" max="100" step="1" value="0">
+        <span id="score-threshold-value" class="value-display">0%</span>
+      </div>
+    </label>
+  </div>
 </div>
 
 <div class="image-mode-control">
@@ -49,16 +68,18 @@
         <input type="file" id="image-upload" accept="image/*">
       </div>
       <div id="image-preview-container" class="preview-container">
-        <img id="test-image" src="pose_model.png" crossorigin="anonymous" />
-        <canvas id="image-canvas"></canvas>
+        <img id="test-image" src="dog_fluffy.jpg" crossorigin="anonymous" />
       </div>
     </div>
     <div id="view-webcam" class="webcam-container">
       <div class="cam-container">
         <video id="webcam" autoplay playsinline></video>
-        <canvas id="output_canvas"></canvas>
       </div>
       <button id="webcamButton" class="action-btn" disabled>Enable Webcam</button>
     </div>
+  </div>
+
+  <div id="classification-results" class="classification-results">
+    <!-- Results will be injected here -->
   </div>
 </div>
