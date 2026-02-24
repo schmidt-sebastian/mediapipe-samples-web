@@ -583,7 +583,10 @@ export function cleanupFaceDetector() {
 
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
+    worker.terminate();
+    worker = undefined;
   }
+  isWorkerReady = false;
 
   if (canvasCtx && canvasElement) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);

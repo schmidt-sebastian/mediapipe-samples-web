@@ -602,8 +602,7 @@ function updateInferenceTime(time: number) {
 export function cleanupAudioClassifier() {
   stopRecording();
   if (worker) {
-    worker.terminate(); // Terminate to stop any WASM loops etc?
-    // Or post cleanup
+    worker.terminate();
     worker = undefined;
   }
 }

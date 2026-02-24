@@ -510,6 +510,11 @@ function updateInferenceTime(time: number) {
 export function cleanupFaceLandmarker() {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   stopCam();
-  if (worker) worker.postMessage({ type: 'CLEANUP' });
+  if (worker) {
+    worker.postMessage({ type: 'CLEANUP' });
+    worker.terminate();
+    worker = undefined;
+  }
+  isWorkerReady = false;
   if (canvasCtx && canvasElement) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 }

@@ -642,12 +642,13 @@ export function cleanupObjectDetection() {
 
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
-    // We optionally terminate the worker or keep it alive, let's keep it alive for faster resumes, 
-    // but tell it to close the internal mediapipe instance
+    worker.terminate(); // Ensure worker is killed
+    worker = undefined; // Clear variable to force new worker next time
   }
 
   // Also clear canvas
   if (canvasCtx && canvasElement) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   }
+  isWorkerReady = false;
 }

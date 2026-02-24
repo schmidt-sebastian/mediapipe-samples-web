@@ -44,6 +44,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Run Tests
+        timeout-minutes: 10
         run: npm run test
 
       - name: Build

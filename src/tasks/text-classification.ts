@@ -233,7 +233,6 @@ function displayResults(result: any) {
 
 export function cleanupTextClassification() {
   if (worker) {
-    worker.postMessage({ type: 'CLEANUP' });
     worker.terminate();
     worker = undefined;
   }
