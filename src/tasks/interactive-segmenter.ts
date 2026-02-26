@@ -1,10 +1,21 @@
 // @ts-ignore
 import template from '../templates/interactive-segmenter.html?raw';
+import { ViewToggle } from '../components/view-toggle';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
 let outputCanvas: HTMLCanvasElement;
 let outputCtx: CanvasRenderingContext2D;
+// Webcam elements
+let video: HTMLVideoElement;
+let webcamCapture: HTMLCanvasElement;
+let webcamOverlay: HTMLCanvasElement;
+let webcamCtx: CanvasRenderingContext2D;
+let overlayCtx: CanvasRenderingContext2D;
+let webcamButton: HTMLButtonElement;
+let freezeButton: HTMLButtonElement;
+let stream: MediaStream | null = null;
+let isFrozen = false;
 
 const models: Record<string, string> = {
   'magic_touch': 'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite'
@@ -15,6 +26,24 @@ export async function setupInteractiveSegmenter(container: HTMLElement) {
 
   outputCanvas = document.getElementById('output_canvas') as HTMLCanvasElement;
   outputCtx = outputCanvas.getContext('2d', { willReadFrequently: true })!;
+
+  // Initialize webcam elements
+  video = document.getElementById('webcam') as HTMLVideoElement;
+  webcamCapture = document.getElementById('webcam-capture') as HTMLCanvasElement;
+  webcamOverlay = document.getElementById('webcam-overlay') as HTMLCanvasElement;
+  webcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
+  freezeButton = document.getElementById('freezeButton') as HTMLButtonElement;
+
+  webcamCtx = webcamCapture.getContext('2d', { willReadFrequently: true })!;
+  overlayCtx = webcamOverlay.getContext('2d', { willReadFrequently: true })!;
+
+  // Set initial visibility
+  webcamCapture.style.display = 'none';
+  webcamOverlay.style.display = 'none';
+  webcamOverlay.style.position = 'absolute';
+  webcamOverlay.style.top = '0';
+  webcamOverlay.style.left = '0';
+  webcamOverlay.style.pointerEvents = 'none'; // Let clicks pass through to capture canvas if needed, but we bind click to capture canvas
 
   initWorker();
   setupUI();
@@ -40,12 +69,21 @@ function handleWorkerMessage(event: MessageEvent) {
     case 'INIT_DONE':
       isWorkerReady = true;
       updateStatus('Ready');
+      webcamButton.disabled = false;
       break;
 
     case 'SEGMENT_RESULT':
       const { maskData, width, height, inferenceTime } = event.data;
       updateInferenceTime(inferenceTime);
-      drawResult(maskData, width, height);
+
+      // Determine where to draw based on active view
+      const activeTab = document.querySelector('.view-tab.active')?.getAttribute('data-value');
+      if (activeTab === 'webcam') {
+        drawResult(maskData, width, height, overlayCtx);
+      } else {
+        drawResult(maskData, width, height, outputCtx);
+      }
+
       updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
       break;
 
@@ -59,10 +97,11 @@ function handleWorkerMessage(event: MessageEvent) {
 async function initializeSegmenter() {
   isWorkerReady = false;
   updateStatus('Loading Model...');
+  webcamButton.disabled = true;
 
   // @ts-ignore
   const baseUrl = import.meta.env.BASE_URL;
-  const modelPath = models['magic_touch']; // Fixed for now
+  const modelPath = models['magic_touch'];
 
   worker?.postMessage({
     type: 'INIT',
@@ -77,9 +116,23 @@ function setupUI() {
   const imagePreviewContainer = document.getElementById('image-preview-container')!;
   const testImage = document.getElementById('test-image') as HTMLImageElement;
   const dropzone = document.querySelector('.upload-dropzone') as HTMLElement;
-  const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
 
-  if (dropzone) dropzone.addEventListener('click', () => imageUpload.click());
+  // Fix: Stop propagation on image click to prevent opening file picker
+  // The dropzone has a click listener that opens file picker
+  if (dropzone) {
+    dropzone.addEventListener('click', (e) => {
+      if (e.target !== imageUpload) {
+        imageUpload.click();
+      }
+    });
+  }
+
+  // Prevent clicks on the preview container from bubbling up to dropzone
+  if (imagePreviewContainer) {
+    imagePreviewContainer.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
 
   imageUpload.addEventListener('change', (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -88,7 +141,8 @@ function setupUI() {
       reader.onload = (e) => {
         testImage.src = e.target?.result as string;
         imagePreviewContainer.style.display = '';
-        if (dropzoneContent) dropzoneContent.style.display = 'none';
+        if (dropzone) dropzone.classList.add('active'); // Use class instead of hiding content logic directly if we want css control
+        // if (dropzoneContent) dropzoneContent.style.display = 'none'; // CSS handles this now
 
         // Clear previous result
         outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
@@ -98,64 +152,193 @@ function setupUI() {
   });
 
   // Handle clicks on image/canvas
-  const handleInteraction = async (e: MouseEvent) => {
-    if (!isWorkerReady || !testImage.src) return;
+  const handleInteraction = async (e: MouseEvent, source: 'image' | 'webcam') => {
+    console.log('Interaction detected:', source);
+    if (!isWorkerReady) {
+      console.log('Worker not ready');
+      return;
+    }
 
-    // Get click coordinates relative to the image
-    const rect = testImage.getBoundingClientRect();
+    let targetElement: HTMLImageElement | HTMLCanvasElement;
+    let originalBitmapSource: HTMLImageElement | HTMLCanvasElement;
+
+    if (source === 'image') {
+      if (!testImage.src) return;
+      targetElement = testImage;
+      originalBitmapSource = testImage;
+    } else {
+      // Webcam source
+      console.log('Webcam source. detection. isFrozen:', isFrozen);
+      if (!isFrozen) return; // Only segment when frozen
+      targetElement = webcamCapture;
+      originalBitmapSource = webcamCapture;
+    }
+
+    const rect = targetElement.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
 
+    console.log('Click coordinates:', x, y);
+
     if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
       updateStatus('Segmenting...');
-      const bitmap = await createImageBitmap(testImage);
-      worker?.postMessage({
-        type: 'SEGMENT',
-        bitmap,
-        pt: { x, y }
-      }, [bitmap]);
+      try {
+        const bitmap = await createImageBitmap(originalBitmapSource);
+        worker?.postMessage({
+          type: 'SEGMENT',
+          bitmap,
+          pt: { x, y }
+        }, [bitmap]);
+      } catch (err) {
+        console.error('Error creating bitmap or sending message:', err);
+      }
     }
   };
 
-  testImage.addEventListener('click', handleInteraction);
-  outputCanvas.addEventListener('click', handleInteraction);
+  testImage.addEventListener('click', (e) => handleInteraction(e, 'image'));
+  outputCanvas.addEventListener('click', (e) => handleInteraction(e, 'image'));
+
+  // Webcam interactions
+  webcamCapture.addEventListener('click', (e) => handleInteraction(e, 'webcam'));
+  webcamOverlay.addEventListener('click', (e) => {
+    // Forward click to capture canvas logic since overlay is on top
+    handleInteraction(e, 'webcam');
+  });
 
   // Resize canvas to match image when loaded
   testImage.onload = () => {
     outputCanvas.width = testImage.naturalWidth;
     outputCanvas.height = testImage.naturalHeight;
-    outputCanvas.style.width = '100%';
-    outputCanvas.style.height = 'auto';
+    // outputCanvas.style.width = '100%';
+    // outputCanvas.style.height = 'auto';
   };
-  // Trigger onload if already complete
+
   if (testImage.complete) {
     testImage.onload(new Event('load'));
   }
+
+  // View Toggle
+  new ViewToggle(
+    'view-mode-toggle',
+    [
+      { label: 'Webcam', value: 'webcam' },
+      { label: 'Image', value: 'image' }
+    ],
+    'webcam', // Default active
+    (value) => {
+      const viewImage = document.getElementById('view-image')!;
+      const viewWebcam = document.getElementById('view-webcam')!;
+
+      if (value === 'webcam') {
+        viewWebcam.style.display = 'block';
+        viewImage.style.display = 'none';
+        viewWebcam.classList.add('active');
+        viewImage.classList.remove('active');
+      } else {
+        viewImage.style.display = 'block';
+        viewWebcam.style.display = 'none';
+        viewImage.classList.add('active');
+        viewWebcam.classList.remove('active');
+      }
+    }
+  );
+
+  webcamButton.addEventListener('click', toggleWebcam);
+  freezeButton.addEventListener('click', toggleFreeze);
 }
 
-function drawResult(maskData: Uint8Array | null, width: number, height: number) {
+async function toggleWebcam() {
+  if (!stream) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      video.style.display = 'block';
+      webcamCapture.style.display = 'none';
+      webcamOverlay.style.display = 'none';
+      webcamButton.innerText = 'Disable Webcam';
+      freezeButton.disabled = false;
+      isFrozen = false;
+      freezeButton.innerText = 'Freeze & Segment';
+      // Reset logging
+      console.log('Webcam started');
+    } catch (err) {
+      console.error('Error accessing webcam:', err);
+      updateStatus('Error accessing webcam');
+    }
+  } else {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+    video.srcObject = null;
+    webcamButton.innerText = 'Enable Webcam';
+    freezeButton.disabled = true;
+    isFrozen = false;
+    // Hide overlay
+    webcamOverlay.style.display = 'none';
+    webcamCapture.style.display = 'none';
+    video.style.display = 'block';
+  }
+}
+
+function toggleFreeze() {
+  if (!stream) return;
+
+  if (!isFrozen) {
+    // Freeze
+    webcamCapture.width = video.videoWidth;
+    webcamCapture.height = video.videoHeight;
+    webcamOverlay.width = video.videoWidth;
+    webcamOverlay.height = video.videoHeight;
+
+    webcamCtx.drawImage(video, 0, 0);
+
+    video.style.display = 'none';
+    webcamCapture.style.display = 'block';
+    webcamOverlay.style.display = 'block';
+    // EXPLICITLY ENABLE POINTER EVENTS
+    webcamOverlay.style.pointerEvents = 'auto';
+    webcamOverlay.classList.add('clickable');
+
+    // Position overlay matches capture
+    webcamOverlay.style.width = '100%'; // CSS handles layout
+
+    isFrozen = true;
+    freezeButton.innerText = 'Unfreeze';
+    updateStatus('Click on object to segment');
+    console.log('Webcam frozen. Clicks enabled on overlay.');
+  } else {
+    // Unfreeze
+    isFrozen = false;
+    freezeButton.innerText = 'Freeze & Segment';
+    video.style.display = 'block';
+    webcamCapture.style.display = 'none';
+    webcamOverlay.style.display = 'none';
+    webcamOverlay.style.pointerEvents = 'none';
+
+    // Clear overlay
+    overlayCtx.clearRect(0, 0, webcamOverlay.width, webcamOverlay.height);
+    updateStatus('Ready to freeze');
+  }
+}
+
+function drawResult(maskData: Uint8Array | null, width: number, height: number, ctx: CanvasRenderingContext2D) {
   if (!maskData) return;
 
   // Create ImageData
-  const imageData = outputCtx.createImageData(width, height);
+  const imageData = ctx.createImageData(width, height);
   const data = imageData.data;
 
-  // Overlay color (e.g., semi-transparent blue)
-  // Mask is uint8, usually 0 or 1? Or category index?
-  // Interactive segmenter usually returns category mask where 1 is the object.
-
   for (let i = 0; i < maskData.length; i++) {
-    const category = maskData[i]; // 0 or 1 usually
+    const category = maskData[i];
     if (category > 0) {
       const offset = i * 4;
       data[offset] = 0;     // R
       data[offset + 1] = 0; // G
       data[offset + 2] = 255; // B
-      data[offset + 3] = 128; // Alpha (semi-transparent)
+      data[offset + 3] = 128; // Alpha
     }
   }
 
-  outputCtx.putImageData(imageData, 0, 0);
+  ctx.putImageData(imageData, 0, 0);
 }
 
 function updateStatus(msg: string) {
@@ -169,6 +352,10 @@ function updateInferenceTime(time: number) {
 }
 
 export function cleanupInteractiveSegmenter() {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
   if (worker) {
     worker.terminate();
     worker = undefined;

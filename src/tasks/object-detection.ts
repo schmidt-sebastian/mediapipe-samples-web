@@ -24,7 +24,9 @@ const models: Record<string, string> = {
 };
 
 // @ts-ignore
+// @ts-ignore
 import template from '../templates/object-detection.html?raw';
+import { ViewToggle } from '../components/view-toggle';
 
 export async function setupObjectDetection(container: HTMLElement) {
   container.innerHTML = template;
@@ -193,8 +195,6 @@ async function initializeDetector() {
 
 function setupUI() {
   // Top-level View Tabs (Webcam vs Image)
-  const tabWebcam = document.getElementById('tab-webcam')!;
-  const tabImage = document.getElementById('tab-image')!;
   const viewWebcam = document.getElementById('view-webcam')!;
   const viewImage = document.getElementById('view-image')!;
 
@@ -205,8 +205,6 @@ function setupUI() {
   const switchView = (mode: 'VIDEO' | 'IMAGE') => {
     localStorage.setItem('mediapipe-running-mode', mode);
     if (mode === 'VIDEO') {
-      tabWebcam.classList.add('active');
-      tabImage.classList.remove('active');
       viewWebcam.classList.add('active');
       viewImage.classList.remove('active');
       runningMode = 'VIDEO';
@@ -216,8 +214,6 @@ function setupUI() {
       });
       enableCam();
     } else {
-      tabWebcam.classList.remove('active');
-      tabImage.classList.add('active');
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
       runningMode = 'IMAGE';
@@ -237,19 +233,20 @@ function setupUI() {
     }
   };
 
-  // Set initial state
-  if (initialMode === 'VIDEO') {
-    switchView('VIDEO');
-  } else {
-    switchView('IMAGE');
-  }
+  new ViewToggle(
+    'view-mode-toggle',
+    [
+      { label: 'Webcam', value: 'video' },
+      { label: 'Image', value: 'image' }
+    ],
+    initialMode.toLowerCase(),
+    (value) => {
+      switchView(value === 'video' ? 'VIDEO' : 'IMAGE');
+    }
+  );
 
-  tabWebcam.addEventListener('click', () => {
-    if (runningMode !== 'VIDEO') switchView('VIDEO');
-  });
-  tabImage.addEventListener('click', () => {
-    if (runningMode !== 'IMAGE') switchView('IMAGE');
-  });
+  // Set initial state
+  switchView(initialMode);
 
   // Define enableCam before using it if possible, or hoist it?
   // enableCam is defined below so it's hoisted.
@@ -427,13 +424,14 @@ function displayImageDetections(result: ObjectDetectorResult, image: HTMLImageEl
   imageCanvas.width = image.naturalWidth;
   imageCanvas.height = image.naturalHeight;
   // Scale canvas to match image display size? 
-  // Actually the image is styled with max-width: 100%. 
+  // Actually the image is styled with max-width: 100%.
   // We should probably rely on the canvas having the same dimensions as the natural image
   // and let CSS scale it down if needed, OR we match the displayed size.
   // For simplicity, let's match natural size and scale with CSS.
 
-  imageCanvas.style.width = `${image.width}px`;
-  imageCanvas.style.height = `${image.height}px`;
+  // Canvas size logic handled by CSS wrapper
+  // imageCanvas.style.width = '${image.width}px';
+  // imageCanvas.style.height = '${image.height}px';
 
   ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
 

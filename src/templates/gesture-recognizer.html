@@ -1,111 +1,111 @@
-<div class="model-settings-control">
-  <div id="status-message" class="status-msg">Initializing...</div>
-  <div id="inference-time" class="status-msg">Inference Time: 0ms</div>
-  <div class="tabs">
-    <div class="tab active" id="tab-model-list">Pre-trained Models</div>
-    <div class="tab" id="tab-model-upload">Upload Model</div>
-  </div>
+<div class="task-container">
+  <div class="controls-panel">
+    <div class="section-title">Model Selection</div>
+    <div class="tabs-container">
+      <div class="tab-button active" id="tab-model-list">Pre-trained Models</div>
+      <div class="tab-button" id="tab-model-upload">Upload</div>
+    </div>
 
-  <div class="tab-content">
-    <div id="view-model-list" class="active">
-      <div class="control-group">
-        <label>
-          Model Selection
-          <select id="model-select">
-            <option value="gesture_recognizer" selected>Gesture Recognizer (Default)</option>
-          </select>
-        </label>
+    <div class="tab-content active" id="view-model-list">
+      <div class="select-wrapper">
+        <select id="model-select">
+          <option value="gesture_recognizer" selected>Gesture Recognizer (Default)</option>
+        </select>
       </div>
     </div>
-    <div id="view-model-upload">
-      <div class="control-group">
-        <label>
-          Upload .task or .tflite file
-          <input type="file" id="model-upload" accept=".task,.tflite">
-        </label>
-        <div id="upload-status" class="status-msg">No file selected</div>
+<div class="tab-content" id="view-model-upload">
+  <label class="file-upload-btn">
+    Upload .task or .tflite
+    <input type="file" id="model-upload" accept=".task,.tflite">
+  </label>
+      <div id="upload-status" class="status-text">No file selected</div>
       </div>
-    </div>
-  </div>
+<div class="divider"></div>
 
-  <div class="control-group">
-    <label>
-      Num Hands
-      <div class="slider-container">
-        <input type="range" id="num-hands" min="1" max="10" value="2" step="1">
-        <span id="num-hands-value" class="value-display">2</span>
+<div class="section-title">Settings</div>
+<div class="control-group">
+  <div class="control-label">
+    <span>Delegate</span>
+  </div>
+  <div class="select-wrapper">
+    <select id="delegate-select">
+      <option value="GPU">GPU</option>
+      <option value="CPU">CPU</option>
+    </select>
       </div>
-    </label>
-  </div>
-  <div class="control-group">
-    <label>
-      Min Hand Detection Confidence
-      <div class="slider-container">
-        <input type="range" id="min-hand-detection-confidence" min="0" max="1" value="0.5" step="0.05">
-        <span id="min-hand-detection-confidence-value" class="value-display">0.5</span>
       </div>
-    </label>
-  </div>
-  <div class="control-group">
-    <label>
-      Min Hand Presence Confidence
-      <div class="slider-container">
-        <input type="range" id="min-hand-presence-confidence" min="0" max="1" value="0.5" step="0.05">
-        <span id="min-hand-presence-confidence-value" class="value-display">0.5</span>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Num Hands</span>
+        <span id="num-hands-value" class="value-badge">2</span>
       </div>
-    </label>
-  </div>
-  <div class="control-group">
-    <label>
-      Min Tracking Confidence
-      <div class="slider-container">
-        <input type="range" id="min-tracking-confidence" min="0" max="1" value="0.5" step="0.05">
-        <span id="min-tracking-confidence-value" class="value-display">0.5</span>
+      <input type="range" id="num-hands" min="1" max="10" value="2" step="1" class="range-slider">
       </div>
-    </label>
-  </div>
-  <div class="control-group">
-    <label>
-      Delegate
-      <select id="delegate-select">
-        <option value="GPU">GPU</option>
-        <option value="CPU">CPU</option>
-      </select>
-    </label>
-  </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Min Hand Detection</span>
+        <span id="min-hand-detection-confidence-value" class="value-badge">0.5</span>
+      </div>
+      <input type="range" id="min-hand-detection-confidence" min="0" max="1" value="0.5" step="0.05" class="range-slider">
+      </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Min Hand Presence</span>
+        <span id="min-hand-presence-confidence-value" class="value-badge">0.5</span>
+      </div>
+      <input type="range" id="min-hand-presence-confidence" min="0" max="1" value="0.5" step="0.05" class="range-slider">
+      </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Min Tracking</span>
+        <span id="min-tracking-confidence-value" class="value-badge">0.5</span>
+      </div>
+      <input type="range" id="min-tracking-confidence" min="0" max="1" value="0.5" step="0.05" class="range-slider">
+      </div>
+<div class="divider"></div>
+<div id="status-message" class="status-message">Initializing...</div>
+<div id="inference-time" class="inference-time">Inference Time: 0ms</div>
 </div>
 
-<div class="image-mode-control">
-  <div class="tabs">
-    <div class="tab active" id="tab-image">Image</div>
-    <div class="tab" id="tab-webcam">Webcam</div>
-  </div>
-
-  <div class="view-content">
-    <div id="view-image" class="active">
-      <div class="upload-dropzone">
-        <div class="dropzone-content">
-          <span class="icon">📁</span>
-          <span>Drag & Drop or Click to Upload</span>
-        </div>
-        <input type="file" id="image-upload" accept="image/*">
-      </div>
-      <div id="image-preview-container" class="preview-container">
-        <img id="test-image" src="hand_model.png" crossorigin="anonymous" />
-        <canvas id="image-canvas"></canvas>
-      </div>
+  <div class="output-panel">
+    <div class="output-header">
+      <h2>Gesture Recognizer</h2>
+      <div id="view-mode-toggle"></div>
     </div>
-    <div id="view-webcam" class="webcam-container">
-      <div class="cam-container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="output_canvas"></canvas>
-      </div>
-      <button id="webcamButton" class="action-btn" disabled>Enable Webcam</button>
-    </div>
-  </div>
 
-  <div id="gesture-results" class="results-container">
-    <h3>Gesture Results</h3>
-    <div id="gesture-output"></div>
+    <div class="viewport">
+      <div id="view-image" class="view-content active">
+        <div class="upload-dropzone">
+          <div class="dropzone-content">
+            <span class="material-icons large-icon">image</span>
+            <span>Drag & Drop or Click to Upload</span>
+            <input type="file" id="image-upload" accept="image/*">
+            </div>
+            <div id="image-preview-container" class="preview-container">
+              <img id="test-image" src="hand_model.png" crossorigin="anonymous" />
+              <canvas id="image-canvas"></canvas>
+            </div>
+            </div>
+      </div>
+      
+      <div id="view-webcam" class="view-content">
+        <div class="cam-container">
+          <div class="video-wrapper">
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="output_canvas"></canvas>
+            </div>
+          <button id="webcamButton" class="action-button">Enable Webcam</button>
+          </div>
+          </div>
+          </div>
+
+    <div id="gesture-results" class="results-container">
+      <h3>Gesture Results</h3>
+      <div id="gesture-output"></div>
+    </div>
   </div>
 </div>

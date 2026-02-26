@@ -1,6 +1,8 @@
 import { AudioClassifierResult } from '@mediapipe/tasks-audio';
 // @ts-ignore
+// @ts-ignore
 import template from '../templates/audio-classifier.html?raw';
+import { ViewToggle } from '../components/view-toggle';
 
 // @ts-ignore
 import AudioClassifierWorker from '../workers/audio-classifier.worker.ts?worker';
@@ -156,21 +158,15 @@ function handleWorkerMessage(event: MessageEvent) {
 
 function setupUI() {
   // Tab switching
-  const tabMic = document.getElementById('tab-microphone')!;
-  const tabFile = document.getElementById('tab-file')!;
   const viewMic = document.getElementById('view-microphone')!;
   const viewFile = document.getElementById('view-file')!;
 
   const switchView = (mode: 'MIC' | 'FILE') => {
     if (mode === 'MIC') {
-      tabMic.classList.add('active');
-      tabFile.classList.remove('active');
       viewMic.classList.add('active');
       viewFile.classList.remove('active');
       runningMode = 'AUDIO_STREAM';
     } else {
-      tabMic.classList.remove('active');
-      tabFile.classList.add('active');
       viewMic.classList.remove('active');
       viewFile.classList.add('active');
       runningMode = 'AUDIO_CLIPS';
@@ -179,8 +175,17 @@ function setupUI() {
     clearClassificationResult();
   };
 
-  tabMic.addEventListener('click', () => switchView('MIC'));
-  tabFile.addEventListener('click', () => switchView('FILE'));
+  new ViewToggle(
+    'view-mode-toggle',
+    [
+      { label: 'Microphone', value: 'mic' },
+      { label: 'Audio File', value: 'file' }
+    ],
+    'mic',
+    (value) => {
+      switchView(value === 'mic' ? 'MIC' : 'FILE');
+    }
+  );
 
   // Delegate
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;

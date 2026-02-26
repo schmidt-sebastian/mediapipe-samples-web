@@ -78,10 +78,7 @@
     <div class="output-panel">
         <div class="output-header">
             <h2>Object Detection</h2>
-            <div class="view-tabs">
-                <button id="tab-webcam" class="view-tab">Webcam</button>
-                <button id="tab-image" class="view-tab active">Image</button>
-            </div>
+<div id="view-mode-toggle"></div>
         </div>
 
         <div class="viewport">
@@ -107,8 +104,10 @@
                         <input type="file" id="image-upload" accept="image/*">
                     </div>
                     <div id="image-preview-container" class="preview-container">
-                        <img id="test-image" src="dog.jpg" crossorigin="anonymous" />
-                        <canvas id="image-canvas"></canvas>
+                        <div class="canvas-wrapper">
+                            <img id="test-image" src="dog.jpg" crossorigin="anonymous" />
+                            <canvas id="image-canvas"></canvas>
+                        </div>
                     </div>
                     <button id="re-upload-btn" class="action-button re-upload" style="display: flex;">
                         <span class="material-icons">upload</span> Upload New Image

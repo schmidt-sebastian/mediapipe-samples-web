@@ -26,7 +26,9 @@ const models: Record<string, string> = {
 };
 
 // @ts-ignore
+// @ts-ignore
 import template from '../templates/holistic-landmarker.html?raw';
+import { ViewToggle } from '../components/view-toggle';
 
 export async function setupHolisticLandmarker(container: HTMLElement) {
   container.innerHTML = template;
@@ -133,24 +135,18 @@ async function initializeDetector() {
 }
 
 function setupUI() {
-  const tabWebcam = document.getElementById('tab-webcam')!;
-  const tabImage = document.getElementById('tab-image')!;
   const viewWebcam = document.getElementById('view-webcam')!;
   const viewImage = document.getElementById('view-image')!;
 
   const switchView = (mode: 'VIDEO' | 'IMAGE') => {
     localStorage.setItem('mediapipe-running-mode', mode);
     if (mode === 'VIDEO') {
-      tabWebcam.classList.add('active');
-      tabImage.classList.remove('active');
       viewWebcam.classList.add('active');
       viewImage.classList.remove('active');
       runningMode = 'VIDEO';
       worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
       enableCam();
     } else {
-      tabWebcam.classList.remove('active');
-      tabImage.classList.add('active');
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
       runningMode = 'IMAGE';
@@ -165,11 +161,21 @@ function setupUI() {
   };
 
   const storedMode = localStorage.getItem('mediapipe-running-mode') as 'VIDEO' | 'IMAGE';
-  if (storedMode === 'VIDEO') switchView('VIDEO');
-  else switchView('IMAGE');
+  const initialMode = storedMode || 'IMAGE';
 
-  tabWebcam.addEventListener('click', () => { if (runningMode !== 'VIDEO') switchView('VIDEO'); });
-  tabImage.addEventListener('click', () => { if (runningMode !== 'IMAGE') switchView('IMAGE'); });
+  new ViewToggle(
+    'view-mode-toggle',
+    [
+      { label: 'Webcam', value: 'video' },
+      { label: 'Image', value: 'image' }
+    ],
+    initialMode.toLowerCase(),
+    (value) => {
+      switchView(value === 'video' ? 'VIDEO' : 'IMAGE');
+    }
+  );
+
+  switchView(initialMode);
 
   enableWebcamButton.addEventListener('click', toggleCam);
 
@@ -235,8 +241,8 @@ function displayImageResult(result: HolisticLandmarkerResult) {
 
   imageCanvas.width = testImage.naturalWidth;
   imageCanvas.height = testImage.naturalHeight;
-  imageCanvas.style.width = '100%';
-  imageCanvas.style.height = 'auto';
+  // imageCanvas.style.width = '100%';
+  // imageCanvas.style.height = 'auto';
 
   ctx.clearRect(0, 0, imageCanvas.width, imageCanvas.height);
 

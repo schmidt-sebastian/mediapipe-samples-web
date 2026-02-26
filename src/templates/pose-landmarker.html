@@ -97,10 +97,7 @@
     <div class="output-panel">
         <div class="output-header">
             <h2>Pose Landmarker</h2>
-            <div class="view-tabs">
-                <button id="tab-webcam" class="view-tab">Webcam</button>
-                <button id="tab-image" class="view-tab active">Image</button>
-            </div>
+<div id="view-mode-toggle"></div>
         </div>
 
         <div class="viewport">
@@ -126,9 +123,11 @@
                         <input type="file" id="image-upload" accept="image/*">
                     </div>
                     <div id="image-preview-container" class="preview-container">
+                        <div class="canvas-wrapper">
                         <img id="test-image" src="pose_model.png" crossorigin="anonymous" />
                         <!-- Using explicit id to avoid conflicts like in hand-landmarker -->
                         <canvas id="image-canvas"></canvas>
+                        </div>
                     </div>
                     <button id="re-upload-btn" class="action-button re-upload" style="display: flex;">
                         <span class="material-icons">upload</span> Upload New Image

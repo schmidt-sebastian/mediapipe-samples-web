@@ -596,22 +596,50 @@ video {
 }
 
 /* Image Preview */
+.canvas-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.preview-container .canvas-wrapper img {
+  display: block;
+  max-width: 100%;
+  max-height: 500px;
+  width: auto;
+  height: auto;
+  object-fit: fill;
+  /* Reset object-fit to ensure physical element matches image pixels exactly */
+}
+
+.preview-container .canvas-wrapper canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  object-fit: fill;
+  /* Let clicks pass through if needed, though tasks might bind to it */
+}
 .preview-container {
   position: relative;
   width: 100%;
-  min-height: 400px;
+  min-height: 200px;
+    /* Reduced from 400px so it fits inside dropzone or expands it */
   background: var(--surface);
   display: grid;
   place-items: center;
   border-radius: var(--radius-md);
-  overflow: hidden;
   margin-bottom: 1rem;
 }
 
 .upload-dropzone {
   width: 100%;
   max-width: 500px;
-  height: 300px;
+  min-height: 300px;
+    /* Changed from height to min-height */
+    height: auto;
   border: 2px dashed #ccc;
   border-radius: var(--radius-md);
   display: flex;
@@ -622,7 +650,8 @@ video {
   transition: all 0.2s;
   background: #f8f9fa;
   margin: 0 auto;
-  /* Center horizontal */
+  padding: 20px;
+    /* Added padding to ensure content doesn't hit border */
 }
 
 .upload-dropzone:hover {
@@ -654,39 +683,8 @@ video {
   border-radius: 30px;
   /* Rounded player */
 }
-.preview-container img {
-  max-width: 100%;
-  max-height: 500px;
-  object-fit: contain;
-  display: block;
-  grid-area: 1 / 1;
-  z-index: 10;
-    position: relative;
-}
 
-.preview-container canvas {
-  width: 100%;
-  height: 100%;
-  max-height: 500px;
-  /* Match image max-height */
-  object-fit: contain;
-  pointer-events: none;
-  grid-area: 1 / 1;
-  z-index: 20;
-  position: relative;
-}
 
-.upload-dropzone {
-  width: 100%;
-  height: 100%;
-    /* Ensure it fills the viewport so absolute positioning at bottom matches webcam view */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  justify-content: center;
-    /* Center content vertically too if needed, or just let it flow */
-}
 
 .upload-dropzone input {
   position: absolute;
@@ -946,4 +944,222 @@ video {
     color: var(--text-secondary);
     text-align: center;
     margin-top: 4px;
+}
+/* Classification Results */
+.classification-results {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 400px;
+  /* Limit width */
+}
+
+.classification-row {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s;
+}
+
+.classification-row:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.category-name {
+  font-weight: 500;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  text-transform: capitalize;
+  flex: 1;
+}
+
+.score-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 140px;
+  /* Fixed width for consistency */
+}
+
+.score-bar {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.score-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--width, 0%);
+  /* We need to set this var inline or use style width directly on a child */
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.4s ease-out;
+}
+
+/* Fix: The current TS sets style="width: %" on .score-bar directly. 
+   We should probably wrap it or change TS to set a child or variable. 
+   Current TS: <div class="score-bar" style="width: %"></div>
+   If style width is set on .score-bar, the background will be cut off if we use it as container.
+   Let's check TS again.
+*/
+
+.score-text {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  width: 40px;
+  text-align: right;
+}
+
+/* Updated Classification Results Styling */
+.classification-results {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.classification-row {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.classification-row:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.category-name {
+  font-weight: 500;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  text-transform: capitalize;
+  flex: 1;
+  /* Takes remaining space */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 160px;
+  /* Fixed width for alignment */
+  flex-shrink: 0;
+}
+
+.score-track {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.score-text {
+  width: 40px;
+  text-align: right;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.no-results {
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-color);
+}
+
+/* Interactive Segmenter Webcam Styles */
+.webcam-capture,
+.webcam-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.webcam-overlay {
+  pointer-events: auto;
+  /* Enable clicks if we want to segment on it */
+  z-index: 10;
+}
+
+.video-wrapper {
+  position: relative;
+  /* Ensure it has size */
+}
+
+.action-button.secondary {
+  background-color: var(--secondary);
+  color: white;
+}
+
+.action-button.secondary:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.webcam-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* Hide dropzone border when content is active */
+.upload-dropzone.active {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.upload-dropzone.active .dropzone-content {
+  display: none;
+  /* Ensure text is gone */
+}
+
+/* Ensure webcam overlay is clickable */
+.webcam-overlay.clickable {
+  cursor: crosshair;
 }
