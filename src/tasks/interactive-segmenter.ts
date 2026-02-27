@@ -1,6 +1,7 @@
 // @ts-ignore
 import template from '../templates/interactive-segmenter.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
@@ -20,6 +21,9 @@ let isFrozen = false;
 const models: Record<string, string> = {
   'magic_touch': 'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite'
 };
+
+let currentModelUrl: string = models['magic_touch'];
+let modelSelector: ModelSelector;
 
 export async function setupInteractiveSegmenter(container: HTMLElement) {
   container.innerHTML = template;
@@ -66,7 +70,18 @@ function handleWorkerMessage(event: MessageEvent) {
   const { type } = event.data;
 
   switch (type) {
+    case 'LOAD_PROGRESS':
+      const { progress } = event.data;
+      modelSelector?.showProgress(progress * 100, 100);
+      if (progress >= 1) {
+        setTimeout(() => {
+          modelSelector?.hideProgress();
+        }, 500);
+      }
+      break;
+
     case 'INIT_DONE':
+      modelSelector?.hideProgress();
       isWorkerReady = true;
       updateStatus('Ready');
       webcamButton.disabled = false;
@@ -101,12 +116,11 @@ async function initializeSegmenter() {
 
   // @ts-ignore
   const baseUrl = import.meta.env.BASE_URL;
-  const modelPath = models['magic_touch'];
 
   worker?.postMessage({
     type: 'INIT',
-    modelAssetPath: modelPath,
-    delegate: 'GPU',
+    modelAssetPath: currentModelUrl,
+    delegate: (document.getElementById('delegate-select') as HTMLSelectElement)?.value || 'GPU',
     baseUrl
   });
 }
@@ -131,6 +145,14 @@ function setupUI() {
   if (imagePreviewContainer) {
     imagePreviewContainer.addEventListener('click', (e) => {
       e.stopPropagation();
+    });
+  }
+
+  const reUploadBtn = document.getElementById('re-upload-btn');
+  if (reUploadBtn) {
+    reUploadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      imageUpload.click();
     });
   }
 
@@ -230,16 +252,34 @@ function setupUI() {
       const viewWebcam = document.getElementById('view-webcam')!;
 
       if (value === 'webcam') {
-        viewWebcam.style.display = 'block';
+        viewWebcam.style.display = '';
         viewImage.style.display = 'none';
         viewWebcam.classList.add('active');
         viewImage.classList.remove('active');
       } else {
-        viewImage.style.display = 'block';
+        viewImage.style.display = '';
         viewWebcam.style.display = 'none';
         viewImage.classList.add('active');
         viewWebcam.classList.remove('active');
       }
+    }
+  );
+
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Magic Touch (Default)', value: 'magic_touch', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModelUrl = models[selection.value] || models['magic_touch'];
+      } else if (selection.type === 'custom') {
+        currentModelUrl = URL.createObjectURL(selection.file);
+      }
+      updateStatus('Loading Model...');
+      webcamButton.disabled = true;
+      freezeButton.disabled = true;
+      await initializeSegmenter();
     }
   );
 
@@ -252,6 +292,7 @@ async function toggleWebcam() {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: true });
       video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
       video.style.display = 'block';
       webcamCapture.style.display = 'none';
       webcamOverlay.style.display = 'none';
@@ -269,6 +310,7 @@ async function toggleWebcam() {
     stream.getTracks().forEach(track => track.stop());
     stream = null;
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     webcamButton.innerText = 'Enable Webcam';
     freezeButton.disabled = true;
     isFrozen = false;

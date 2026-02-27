@@ -3,6 +3,7 @@ import template from '../templates/language-detector.html?raw';
 // @ts-ignore
 import LanguageDetectorWorker from '../workers/language-detector.worker?worker';
 
+import { ModelSelector } from '../components/model-selector';
 let worker: Worker | undefined;
 let isWorkerReady = false;
 
@@ -12,6 +13,7 @@ const models: Record<string, string> = {
 };
 
 let currentModel = 'language_detector';
+let modelSelector: ModelSelector;
 let maxResults = 3;
 let scoreThreshold = 0.0;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
@@ -22,7 +24,7 @@ export async function setupLanguageDetector(container: HTMLElement) {
   // UI References
   const detectBtn = document.getElementById('detect-btn') as HTMLButtonElement;
   const textInput = document.getElementById('text-input') as HTMLTextAreaElement;
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
+
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
   const maxResultsInput = document.getElementById('max-results') as HTMLInputElement;
   const maxResultsValue = document.getElementById('max-results-value');
@@ -48,13 +50,22 @@ export async function setupLanguageDetector(container: HTMLElement) {
     });
   });
 
-  if (modelSelect) {
-    modelSelect.addEventListener('change', (e) => {
-      currentModel = (e.target as HTMLSelectElement).value;
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Language Detector', value: 'language_detector', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
       isWorkerReady = false;
-      initDetector();
-    });
-  }
+      await initDetector();
+    }
+  );
 
   if (delegateSelect) {
     delegateSelect.addEventListener('change', (e) => {
@@ -116,7 +127,7 @@ async function initDetector() {
   try {
     worker?.postMessage({
       type: 'INIT',
-      modelAssetPath: models[currentModel],
+      modelAssetPath: currentModel === 'custom' && models['custom'] ? models['custom'] : models[currentModel],
       delegate: currentDelegate,
       maxResults: maxResults,
       scoreThreshold: scoreThreshold,
@@ -165,6 +176,7 @@ function handleWorkerMessage(event: MessageEvent) {
   switch (type) {
     case 'LOAD_PROGRESS':
       const { loaded, total } = event.data;
+      modelSelector?.showProgress(loaded, total);
       if (loadingOverlay && total > 0) {
         const percent = Math.round((loaded / total) * 100);
         const loadingText = loadingOverlay.querySelector('.loading-text');
@@ -174,11 +186,13 @@ function handleWorkerMessage(event: MessageEvent) {
         const percent = Math.round((loaded / total) * 100);
         statusMessage.innerText = `Loading Model... ${percent}%`;
       }
+      if (loaded >= total) setTimeout(() => modelSelector?.hideProgress(), 500);
       break;
     case 'INIT_DONE':
       isWorkerReady = true;
       if ((window as any).modelLoadTimeout) clearTimeout((window as any).modelLoadTimeout);
 
+      modelSelector?.hideProgress();
       if (loadingOverlay) loadingOverlay.style.display = 'none';
       if (statusMessage) statusMessage.innerText = 'Ready';
       if (detectBtn) {

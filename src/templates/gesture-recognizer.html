@@ -1,25 +1,7 @@
 <div class="task-container">
   <div class="controls-panel">
     <div class="section-title">Model Selection</div>
-    <div class="tabs-container">
-      <div class="tab-button active" id="tab-model-list">Pre-trained Models</div>
-      <div class="tab-button" id="tab-model-upload">Upload</div>
-    </div>
-
-    <div class="tab-content active" id="view-model-list">
-      <div class="select-wrapper">
-        <select id="model-select">
-          <option value="gesture_recognizer" selected>Gesture Recognizer (Default)</option>
-        </select>
-      </div>
-    </div>
-<div class="tab-content" id="view-model-upload">
-  <label class="file-upload-btn">
-    Upload .task or .tflite
-    <input type="file" id="model-upload" accept=".task,.tflite">
-  </label>
-      <div id="upload-status" class="status-text">No file selected</div>
-      </div>
+    <div id="model-selector-container"></div>
 <div class="divider"></div>
 
 <div class="section-title">Settings</div>
@@ -95,7 +77,12 @@
       <div id="view-webcam" class="view-content">
         <div class="cam-container">
           <div class="video-wrapper">
-            <video id="webcam" autoplay playsinline></video>
+            
+    <div class="webcam-placeholder" id="webcam-placeholder">
+        <span class="material-icons">videocam_off</span>
+        <p>Webcam Disabled</p>
+    </div>
+    <video id="webcam" autoplay playsinline></video>
             <canvas id="output_canvas"></canvas>
             </div>
           <button id="webcamButton" class="action-button">Enable Webcam</button>

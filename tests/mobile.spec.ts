@@ -81,7 +81,7 @@ test.describe('Mobile Layout & Navigation', () => {
     await expect(page.locator('#status-message')).toHaveText(/(Ready)|(Done)/, { timeout: 30000 });
 
     // Switch to Webcam tab
-    await page.click('#tab-webcam');
+    await page.click('#view-mode-toggle button[data-value="video"]');
     
     const btn = page.locator('#webcamButton');
     await expect(btn).toBeVisible();

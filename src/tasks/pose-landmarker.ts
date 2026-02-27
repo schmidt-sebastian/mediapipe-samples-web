@@ -14,6 +14,7 @@ let drawingUtils: DrawingUtils | undefined;
 
 // Options
 let currentModel = 'pose_landmarker_lite';
+let modelSelector: ModelSelector;
 let minPoseDetectionConfidence = 0.5;
 let minPosePresenceConfidence = 0.5;
 let minTrackingConfidence = 0.5;
@@ -31,6 +32,7 @@ const models: Record<string, string> = {
 // @ts-ignore
 import template from '../templates/pose-landmarker.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 export async function setupPoseLandmarker(container: HTMLElement) {
   container.innerHTML = template;
@@ -67,22 +69,13 @@ function handleWorkerMessage(event: MessageEvent) {
 
   switch (type) {
     case 'LOAD_PROGRESS':
-      const { progress } = event.data;
-      const progressContainer = document.getElementById('model-loading-progress');
-      const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
-      const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
-
-      if (progressContainer && progressBar && progressText) {
-        progressContainer.style.display = 'block';
-        const percent = Math.round(progress * 100);
-        progressBar.style.width = `${percent}%`;
-        progressText.innerText = `Loading Model... ${percent}%`;
-
-        if (progress >= 1) {
-          setTimeout(() => {
-            progressContainer.style.display = 'none';
-          }, 500);
-        }
+      const { progress, loaded, total } = event.data;
+      if (progress !== undefined) {
+        modelSelector?.showProgress(progress * 100, 100);
+        if (progress >= 1) setTimeout(() => modelSelector?.hideProgress(), 500);
+      } else if (loaded !== undefined && total !== undefined) {
+        modelSelector?.showProgress(loaded, total);
+        if (loaded >= total) setTimeout(() => modelSelector?.hideProgress(), 500);
       }
       break;
 
@@ -94,8 +87,7 @@ function handleWorkerMessage(event: MessageEvent) {
       updateStatus('Ready');
 
       // Hide progress
-      const pContainer = document.getElementById('model-loading-progress');
-      if (pContainer) pContainer.style.display = 'none';
+      modelSelector?.hideProgress();
 
       if (runningMode === 'VIDEO') {
         if (video.srcObject) {
@@ -247,50 +239,25 @@ function setupUI() {
 
   enableWebcamButton.addEventListener('click', toggleCam);
 
-  // Model Selection
-  const tabModelList = document.getElementById('tab-model-list')!;
-  const tabModelUpload = document.getElementById('tab-model-upload')!;
-  const viewModelList = document.getElementById('view-model-list')!;
-  const viewModelUpload = document.getElementById('view-model-upload')!;
-
-  const switchModelTab = (tab: 'LIST' | 'UPLOAD') => {
-    if (tab === 'LIST') {
-      tabModelList.classList.add('active');
-      tabModelUpload.classList.remove('active');
-      viewModelList.classList.add('active');
-      viewModelUpload.classList.remove('active');
-      const select = document.getElementById('model-select') as HTMLSelectElement;
-      currentModel = select.value;
-      initializeLandmarker();
-    } else {
-      tabModelList.classList.remove('active');
-      tabModelUpload.classList.add('active');
-      viewModelList.classList.remove('active');
-      viewModelUpload.classList.add('active');
-    }
-  };
-
-  tabModelList.addEventListener('click', () => switchModelTab('LIST'));
-  tabModelUpload.addEventListener('click', () => switchModelTab('UPLOAD'));
-
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
-  modelSelect.addEventListener('change', async (e) => {
-    currentModel = (e.target as HTMLSelectElement).value;
-    await initializeLandmarker();
-  });
-
-  const modelUpload = document.getElementById('model-upload') as HTMLInputElement;
-  const uploadStatus = document.getElementById('upload-status')!;
-  modelUpload.addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      uploadStatus.innerText = file.name;
-      const tempModelUrl = URL.createObjectURL(file);
-      models['custom'] = tempModelUrl;
-      currentModel = 'custom';
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Pose Landmarker (Lite)', value: 'pose_landmarker_lite', isDefault: true },
+      { label: 'Pose Landmarker (Full)', value: 'pose_landmarker_full' },
+      { label: 'Pose Landmarker (Heavy)', value: 'pose_landmarker_heavy' }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
+      enableWebcamButton.innerText = 'Loading...';
+      enableWebcamButton.disabled = true;
       await initializeLandmarker();
     }
-  });
+  );
 
   // Settings
   const setupSlider = (id: string, onChange: (val: number) => void) => {
@@ -445,6 +412,7 @@ async function enableCam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
 
     const playAndPredict = () => {
       video.play().catch(console.error);
@@ -484,6 +452,7 @@ function stopCam() {
     const tracks = stream.getTracks();
     tracks.forEach((track) => track.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
   }

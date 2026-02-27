@@ -26,16 +26,17 @@ test.describe('Gesture Recognizer Task', () => {
   });
 
   test('should support webcam toggling', async ({ page }) => {
-    await page.click('#tab-webcam');
+    await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     const webcamBtn = page.locator('#webcamButton');
-    await expect(webcamBtn).toHaveText('Enable Webcam');
+    await expect(webcamBtn).not.toHaveText('Initializing...', { timeout: 15000 });
 
-    await webcamBtn.click();
-    await expect(webcamBtn).toHaveText('Disable Webcam');
+    // Since it auto-starts, it should eventually be "Disable Webcam"
+    await expect(webcamBtn).toHaveText('Disable Webcam', { timeout: 10000 });
     await expect(page.locator('#status-message')).toHaveText(/(Webcam running...)|(Done)|(Ready)/, { timeout: 15000 });
 
+    // Click to stop
     await webcamBtn.click();
     await expect(webcamBtn).toHaveText('Enable Webcam');
   });

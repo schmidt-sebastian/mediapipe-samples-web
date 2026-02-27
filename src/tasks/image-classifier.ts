@@ -11,6 +11,7 @@ let isWorkerReady = false;
 
 // Options
 let currentModel = 'efficientnet_lite0';
+let modelSelector: ModelSelector;
 let currentDelegate: 'CPU' | 'GPU' = 'GPU';
 let maxResults = 3;
 let scoreThreshold = 0.0;
@@ -24,6 +25,7 @@ const models: Record<string, string> = {
 // @ts-ignore
 import template from '../templates/image-classifier.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 export async function setupImageClassifier(container: HTMLElement) {
   container.innerHTML = template;
@@ -52,7 +54,23 @@ function handleWorkerMessage(event: MessageEvent) {
   const { type } = event.data;
 
   switch (type) {
+    case 'LOAD_PROGRESS':
+      const { progress, loaded, total } = event.data;
+      if (progress !== undefined) {
+        modelSelector?.showProgress(progress * 100, 100);
+        if (progress >= 1) {
+          setTimeout(() => modelSelector?.hideProgress(), 500);
+        }
+      } else if (loaded !== undefined && total !== undefined) {
+        modelSelector?.showProgress(loaded, total);
+        if (loaded >= total) {
+          setTimeout(() => modelSelector?.hideProgress(), 500);
+        }
+      }
+      break;
+
     case 'INIT_DONE':
+      modelSelector?.hideProgress();
       document.querySelector('.viewport')?.classList.remove('loading-model');
       isWorkerReady = true;
       enableWebcamButton.disabled = false;
@@ -174,11 +192,24 @@ function setupUI() {
 
   enableWebcamButton.addEventListener('click', toggleCam);
 
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
-  modelSelect.addEventListener('change', async () => {
-    currentModel = modelSelect.value;
-    await initializeClassifier();
-  });
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'EfficientNet-Lite0', value: 'efficientnet_lite0', isDefault: true },
+      { label: 'EfficientNet-Lite2', value: 'efficientnet_lite2' }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
+      enableWebcamButton.innerText = 'Loading...';
+      enableWebcamButton.disabled = true;
+      await initializeClassifier();
+    }
+  );
 
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
   delegateSelect.addEventListener('change', async () => {
@@ -296,6 +327,7 @@ async function enableCam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
 
     const playAndPredict = () => {
       video.play().catch(console.error);
@@ -331,6 +363,7 @@ function stopCam() {
     const stream = video.srcObject as MediaStream;
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
   }

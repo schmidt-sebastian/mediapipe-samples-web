@@ -2,6 +2,7 @@
 // @ts-ignore
 import template from '../templates/image-segmentation.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 let segmentationWorker: Worker | undefined;
 let isWorkerReady = false;
@@ -18,6 +19,7 @@ let animationFrameId: number;
 // Options
 let outputType: 'CATEGORY_MASK' | 'CONFIDENCE_MASKS' = 'CATEGORY_MASK';
 let currentModelUrl = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/deeplab_v3/float32/1/deeplab_v3.tflite';
+let modelSelector: ModelSelector;
 let labels: string[] = [];
 let confidenceMaskSelection = 0;
 let currentDelegate: 'GPU' | 'CPU' = 'GPU';
@@ -123,13 +125,12 @@ function setupWorkerListener() {
         break;
       case 'LOAD_PROGRESS':
         const { loaded, total } = event.data;
-        const percent = Math.round((loaded / total) * 100);
-        const progressBar = document.querySelector('.progress-bar') as HTMLElement;
-        const progressText = document.querySelector('.progress-text') as HTMLElement;
-        const pContainer = document.querySelector('.progress-container') as HTMLElement;
-        if (pContainer) pContainer.style.display = 'block';
-        if (progressBar) progressBar.style.width = `${percent}%`;
-        if (progressText) progressText.innerText = `Loading Model... ${percent}%`;
+        modelSelector?.showProgress(loaded, total);
+        if (loaded >= total) {
+          setTimeout(() => {
+            modelSelector?.hideProgress();
+          }, 500);
+        }
         break;
       case 'DELEGATE_FALLBACK':
         console.warn('Worker fell back to CPU delegate');
@@ -168,6 +169,7 @@ export function cleanupImageSegmentation() {
     const stream = video.srcObject as MediaStream;
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
   }
   if (segmentationWorker) {
     segmentationWorker.postMessage({ type: 'CLEANUP' });
@@ -299,66 +301,27 @@ function setupUI() {
 
   switchView(initialMode);
 
-  // Model Tabs
-  const tabModelList = document.getElementById('tab-model-list')!;
-  const tabModelUpload = document.getElementById('tab-model-upload')!;
-  const viewModelList = document.getElementById('view-model-list')!;
-  const viewModelUpload = document.getElementById('view-model-upload')!;
-
-  const switchModelTab = (tab: 'LIST' | 'UPLOAD') => {
-    if (tab === 'LIST') {
-      tabModelList.classList.add('active');
-      tabModelUpload.classList.remove('active');
-      viewModelList.classList.add('active');
-      viewModelUpload.classList.remove('active');
-      const select = document.getElementById('model-select') as HTMLSelectElement;
-      if (standardModels[select.value]) {
-        currentModelUrl = standardModels[select.value];
-        initializeSegmenter();
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'DeepLab V3', value: 'deeplab_v3', isDefault: true },
+      { label: 'Hair Segmenter', value: 'hair_segmenter' },
+      { label: 'Selfie Segmenter', value: 'selfie_segmenter' },
+      { label: 'Selfie Multi-class', value: 'selfie_multiclass' }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModelUrl = standardModels[selection.value] || standardModels['deeplab_v3'];
+      } else if (selection.type === 'custom') {
+        currentModelUrl = URL.createObjectURL(selection.file);
       }
-    } else {
-      tabModelList.classList.remove('active');
-      tabModelUpload.classList.add('active');
-      viewModelList.classList.remove('active');
-      viewModelUpload.classList.add('active');
+      enableWebcamButton.innerText = 'Loading...';
+      enableWebcamButton.disabled = true;
+      await initializeSegmenter();
     }
-  };
-
-  tabModelList.addEventListener('click', () => switchModelTab('LIST'));
-  tabModelUpload.addEventListener('click', () => switchModelTab('UPLOAD'));
-
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
-  modelSelect.innerHTML = '';
-  for (const key in standardModels) {
-    const option = document.createElement('option');
-    option.value = key;
-    option.text = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    if (standardModels[key] === currentModelUrl) option.selected = true;
-    modelSelect.appendChild(option);
-  }
+  );
 
   enableWebcamButton.addEventListener('click', toggleCam);
-
-  modelSelect.addEventListener('change', async () => {
-    const key = modelSelect.value;
-    if (standardModels[key]) {
-      currentModelUrl = standardModels[key];
-      enableWebcamButton.innerText = 'Loading...';
-      enableWebcamButton.disabled = true;
-      await initializeSegmenter();
-    }
-  });
-
-  const modelUpload = document.getElementById('model-upload') as HTMLInputElement;
-  modelUpload.addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      currentModelUrl = URL.createObjectURL(file);
-      enableWebcamButton.innerText = 'Loading...';
-      enableWebcamButton.disabled = true;
-      await initializeSegmenter();
-    }
-  });
 
   const outputTypeSelect = document.getElementById('output-type') as HTMLSelectElement;
   const classSelectContainer = document.getElementById('class-select-container') as HTMLElement;
@@ -562,6 +525,7 @@ async function enableCam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
 
     const playAndPredict = () => {
       video.play().catch(console.error);
@@ -598,6 +562,7 @@ function stopCam() {
     const tracks = stream.getTracks();
     tracks.forEach((track) => track.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
     updateStatus('Ready');

@@ -13,6 +13,7 @@ let isWorkerReady = false;
 
 // Options
 let currentModel = 'blaze_face_short_range';
+let modelSelector: ModelSelector;
 let minDetectionConfidence = 0.5;
 let minSuppressionThreshold = 0.3;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
@@ -24,6 +25,7 @@ const models: Record<string, string> = {
 // @ts-ignore
 import template from '../templates/face-detector.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 // @ts-ignore
 import FaceDetectorWorker from '../workers/face-detector.worker.ts?worker';
 
@@ -55,21 +57,11 @@ function handleWorkerMessage(event: MessageEvent) {
   switch (type) {
     case 'LOAD_PROGRESS':
       const { loaded, total } = event.data;
-      const progressContainer = document.getElementById('model-loading-progress');
-      const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
-      const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
-
-      if (progressContainer && progressBar && progressText) {
-        progressContainer.style.display = 'block';
-        const percent = Math.round((loaded / total) * 100);
-        progressBar.style.width = `${percent}%`;
-        progressText.innerText = `Loading Model... ${percent}%`;
-
-        if (percent >= 100) {
-          setTimeout(() => {
-            progressContainer.style.display = 'none';
-          }, 500);
-        }
+      modelSelector?.showProgress(loaded, total);
+      if (loaded >= total) {
+        setTimeout(() => {
+          modelSelector?.hideProgress();
+        }, 500);
       }
       break;
 
@@ -79,8 +71,7 @@ function handleWorkerMessage(event: MessageEvent) {
       enableWebcamButton.disabled = false;
       enableWebcamButton.innerText = 'Enable Webcam';
 
-      const pContainer = document.getElementById('model-loading-progress');
-      if (pContainer) pContainer.style.display = 'none';
+      modelSelector?.hideProgress();
 
       if (runningMode === 'VIDEO') {
         if (video.srcObject) {
@@ -238,57 +229,23 @@ function setupUI() {
 
   enableWebcamButton.addEventListener('click', toggleCam);
 
-  const tabModelList = document.getElementById('tab-model-list')!;
-  const tabModelUpload = document.getElementById('tab-model-upload')!;
-  const viewModelList = document.getElementById('view-model-list')!;
-  const viewModelUpload = document.getElementById('view-model-upload')!;
-
-  const switchModelTab = (tab: 'LIST' | 'UPLOAD') => {
-    if (tab === 'LIST') {
-      tabModelList.classList.add('active');
-      tabModelUpload.classList.remove('active');
-      viewModelList.classList.add('active');
-      viewModelUpload.classList.remove('active');
-      const select = document.getElementById('model-select') as HTMLSelectElement;
-      currentModel = select.value;
-      initializeDetector();
-    } else {
-      tabModelList.classList.remove('active');
-      tabModelUpload.classList.add('active');
-      viewModelList.classList.remove('active');
-      viewModelUpload.classList.add('active');
-    }
-  };
-
-  tabModelList.addEventListener('click', () => switchModelTab('LIST'));
-  tabModelUpload.addEventListener('click', () => switchModelTab('UPLOAD'));
-
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
-  const modelUpload = document.getElementById('model-upload') as HTMLInputElement;
-  const uploadStatus = document.getElementById('upload-status')!;
-
-  modelSelect.addEventListener('change', async (e) => {
-    currentModel = (e.target as HTMLSelectElement).value;
-    modelUpload.value = '';
-    uploadStatus.innerText = 'No file chosen';
-    enableWebcamButton.innerText = 'Loading...';
-    enableWebcamButton.disabled = true;
-    await initializeDetector();
-  });
-
-  modelUpload.addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      uploadStatus.innerText = file.name;
-      const tempModelUrl = URL.createObjectURL(file);
-      models['custom'] = tempModelUrl;
-      currentModel = 'custom';
-
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'BlazeFace (Short Range)', value: 'blaze_face_short_range', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
       enableWebcamButton.innerText = 'Loading...';
       enableWebcamButton.disabled = true;
       await initializeDetector();
     }
-  });
+  );
 
   const minDetectionConfidenceInput = document.getElementById('min-detection-confidence') as HTMLInputElement;
   const minDetectionConfidenceValue = document.getElementById('min-detection-confidence-value')!;
@@ -416,6 +373,7 @@ async function enableCam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
 
     const playAndPredict = () => {
       video.play().catch(console.error);
@@ -455,6 +413,7 @@ function stopCam() {
     const tracks = stream.getTracks();
     tracks.forEach((track) => track.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
   }
@@ -581,6 +540,7 @@ export function cleanupFaceDetector() {
     const stream = video.srcObject as MediaStream;
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
   }
 
   if (worker) {

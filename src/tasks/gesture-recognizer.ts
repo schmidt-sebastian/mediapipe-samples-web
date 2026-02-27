@@ -14,6 +14,7 @@ let drawingUtils: DrawingUtils | undefined;
 
 // Options
 let currentModel = 'gesture_recognizer';
+let modelSelector: ModelSelector;
 let numHands = 2;
 let minHandDetectionConfidence = 0.5;
 let minHandPresenceConfidence = 0.5;
@@ -28,6 +29,7 @@ const models: Record<string, string> = {
 // @ts-ignore
 import template from '../templates/gesture-recognizer.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 export async function setupGestureRecognizer(container: HTMLElement) {
   container.innerHTML = template;
@@ -60,22 +62,12 @@ function handleWorkerMessage(event: MessageEvent) {
 
   switch (type) {
     case 'LOAD_PROGRESS':
-      // Reuse existing progress UI if available, or just log
-      const progressContainer = document.getElementById('model-loading-progress');
-      const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
-      const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
-
-      if (progressContainer && progressBar && progressText) {
-        progressContainer.style.display = 'block';
-        const percent = Math.round((event.data.loaded / event.data.total) * 100);
-        progressBar.style.width = `${percent}%`;
-        progressText.innerText = `Loading Model... ${percent}%`;
-
-        if (percent >= 100) {
-          setTimeout(() => {
-            progressContainer.style.display = 'none';
-          }, 500);
-        }
+      const { loaded, total } = event.data;
+      modelSelector?.showProgress(loaded, total);
+      if (loaded >= total) {
+        setTimeout(() => {
+          modelSelector?.hideProgress();
+        }, 500);
       }
       break;
 
@@ -86,8 +78,7 @@ function handleWorkerMessage(event: MessageEvent) {
       enableWebcamButton.innerText = 'Enable Webcam';
       updateStatus('Ready');
 
-      const pContainer = document.getElementById('model-loading-progress');
-      if (pContainer) pContainer.style.display = 'none';
+      modelSelector?.hideProgress();
 
       if (runningMode === 'VIDEO') {
         if (video.srcObject) {
@@ -226,6 +217,24 @@ function setupUI() {
 
   switchView(initialMode);
 
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Gesture Recognizer (Default)', value: 'gesture_recognizer', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
+      enableWebcamButton.innerText = 'Loading...';
+      enableWebcamButton.disabled = true;
+      await initializeRecognizer();
+    }
+  );
+
   enableWebcamButton.addEventListener('click', toggleCam);
 
   // Sliders
@@ -302,19 +311,7 @@ function setupUI() {
     }
   });
 
-  // Model Upload
-  const modelUpload = document.getElementById('model-upload') as HTMLInputElement;
-  const uploadStatus = document.getElementById('upload-status')!;
-  modelUpload.addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      uploadStatus.innerText = file.name;
-      const tempUrl = URL.createObjectURL(file);
-      models['custom'] = tempUrl;
-      currentModel = 'custom';
-      await initializeRecognizer();
-    }
-  });
+
 }
 
 function reRunImageDetection() {
@@ -409,6 +406,7 @@ async function enableCam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
 
     const playAndPredict = () => {
       video.play().catch(console.error);
@@ -444,6 +442,7 @@ function stopCam() {
     const stream = video.srcObject as MediaStream;
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
   }

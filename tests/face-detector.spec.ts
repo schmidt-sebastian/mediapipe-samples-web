@@ -32,11 +32,11 @@ test.describe('Face Detector Task', () => {
 
   test('should load model and handle image upload', async ({ page }) => {
     // Check defaults
-    await expect(page.locator('#model-select')).toHaveValue('blaze_face_short_range');
+    await expect(page.locator('.model-select')).toHaveValue('blaze_face_short_range');
 
     // Upload Image
     // Upload Image
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.locator('#image-upload').setInputFiles(imagePath);
 
     // Wait for processing
@@ -48,7 +48,7 @@ test.describe('Face Detector Task', () => {
   });
 
   test('should support webcam toggling', async ({ page }) => {
-    await page.click('#tab-webcam');
+    await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     // Wait for App to mount constraints via getUserMedia()

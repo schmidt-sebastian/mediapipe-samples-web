@@ -31,7 +31,7 @@ test.describe('Pose Landmarker Task', () => {
 
   test('should load model and handle image upload', async ({ page }) => {
     // Check defaults
-    await expect(page.locator('#model-select')).toHaveValue('pose_landmarker_lite');
+    await expect(page.locator('.model-select')).toHaveValue('pose_landmarker_lite');
     
     // Check default delegate (likely GPU, but might vary)
     // We won't assert exact value as it might vary by env, but button should be enabled.
@@ -46,7 +46,7 @@ test.describe('Pose Landmarker Task', () => {
     const inferenceTime = page.locator('#inference-time');
     
     // Switch to Image tab explicitly to be safe
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     
     // Upload Image
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -63,7 +63,7 @@ test.describe('Pose Landmarker Task', () => {
   });
 
   test('should support webcam toggling', async ({ page }) => {
-    await page.click('#tab-webcam');
+    await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     // Wait for App to mount constraints via getUserMedia()

@@ -1,5 +1,6 @@
 // @ts-ignore
 import template from '../templates/image-embedder.html?raw';
+import { ModelSelector } from '../components/model-selector';
 
 let worker: Worker | undefined;
 let isWorkerReady = false;
@@ -11,6 +12,7 @@ const models: Record<string, string> = {
 };
 
 let currentModel = 'mobilenet_v3_small';
+let modelSelector: ModelSelector;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
 export async function setupImageEmbedder(container: HTMLElement) {
@@ -18,7 +20,7 @@ export async function setupImageEmbedder(container: HTMLElement) {
 
   // UI References
 
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
+
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
 
   const image1 = document.getElementById('image-1') as HTMLImageElement;
@@ -92,15 +94,24 @@ export async function setupImageEmbedder(container: HTMLElement) {
   image1.onload = checkEnableButton;
   image2.onload = checkEnableButton;
 
-
-
-  if (modelSelect) {
-    modelSelect.addEventListener('change', (e) => {
-      currentModel = (e.target as HTMLSelectElement).value;
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'MobileNet V3 Small', value: 'mobilenet_v3_small', isDefault: true },
+      { label: 'MobileNet V3 Large', value: 'mobilenet_v3_large' }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
       isWorkerReady = false;
       initEmbedder();
-    });
-  }
+    }
+  );
+
 
   if (delegateSelect) {
     delegateSelect.addEventListener('change', (e) => {
@@ -186,7 +197,19 @@ function handleWorkerMessage(event: MessageEvent) {
   const statusMessage = document.getElementById('status-message');
 
   switch (type) {
+    case 'LOAD_PROGRESS':
+      const { progress, loaded, total } = event.data;
+      if (progress !== undefined) {
+        modelSelector?.showProgress(progress * 100, 100);
+        if (progress >= 1) setTimeout(() => modelSelector?.hideProgress(), 500);
+      } else if (loaded !== undefined && total !== undefined) {
+        modelSelector?.showProgress(loaded, total);
+        if (loaded >= total) setTimeout(() => modelSelector?.hideProgress(), 500);
+      }
+      break;
+
     case 'INIT_DONE':
+      modelSelector?.hideProgress();
       isWorkerReady = true;
       if ((window as any).imgEmbedLoadTimeout) clearTimeout((window as any).imgEmbedLoadTimeout);
 

@@ -40,12 +40,12 @@ test.describe('Object Detection Task', () => {
 
   test('should detect objects on CPU and verify defaults', async ({ page }) => {
   // Check default settings
-    await expect(page.locator('#model-select')).toHaveValue('efficientdet_lite0');
+    await expect(page.locator('.model-select')).toHaveValue('efficientdet_lite0');
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
 
     // Upload Image
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image'); // Switch to Image tab
+    await page.click('#view-mode-toggle button[data-value="image"]'); // Switch to Image tab
     await page.click('.upload-dropzone'); // Click dropzone to trigger
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -78,14 +78,14 @@ test.describe('Object Detection Task', () => {
   });
 
   test.skip('should handle model switching', async ({ page }) => {
-    await page.selectOption('#model-select', 'efficientdet_lite2');
+    await page.selectOption('.model-select', 'efficientdet_lite2');
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)/, { timeout: 90000 });
 
     // Wait for worker re-instantiation
     await page.waitForTimeout(1000);
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone', { force: true });
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -104,7 +104,7 @@ test.describe('Object Detection Task', () => {
   });
 
   test('should support webcam toggling and have transparent background', async ({ page }) => {
-    await page.click('#tab-webcam');
+    await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     // Wait for App to mount constraints via getUserMedia()
@@ -141,7 +141,7 @@ test.describe('Object Detection Task', () => {
 
     // Verify it still detects
     const imgChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const imgChooser = await imgChooserPromise;
     await imgChooser.setFiles(imagePath);

@@ -3,34 +3,7 @@
     <div class="controls-panel">
         <!-- Model Section -->
         <div class="section-title">Model Selection</div>
-        <div class="tabs-container">
-            <button id="tab-model-list" class="tab-button active">
-                <span class="material-icons">grid_view</span> Standard
-            </button>
-            <button id="tab-model-upload" class="tab-button">
-                <span class="material-icons">upload</span> Upload
-            </button>
-        </div>
-
-        <div id="view-model-list" class="tab-content active">
-            <div class="select-wrapper">
-                <select id="model-select">
-                    <option value="face_landmarker" selected>Face Landmarker</option>
-                </select>
-            </div>
-        </div>
-
-        <div id="view-model-upload" class="tab-content">
-            <label class="file-upload-btn">
-                Choose .task File
-                <input type="file" id="model-upload" accept=".task">
-            </label>
-            <div id="upload-status" class="status-text">No file chosen</div>
-            <div id="model-loading-progress" class="progress-container" style="display: none;">
-                <div class="progress-bar"></div>
-                <div class="progress-text">Loading Model... 0%</div>
-            </div>
-        </div>
+        <div id="model-selector-container"></div>
 
         <div class="divider"></div>
 
@@ -106,7 +79,12 @@
                         <span class="material-icons">videocam</span> Enable Webcam
                     </button>
                     <div class="video-wrapper">
-                        <video id="webcam" autoplay playsinline muted></video>
+                        
+    <div class="webcam-placeholder" id="webcam-placeholder">
+        <span class="material-icons">videocam_off</span>
+        <p>Webcam Disabled</p>
+    </div>
+    <video id="webcam" autoplay playsinline muted></video>
                         <canvas id="output_canvas"></canvas>
                     </div>
                 </div>

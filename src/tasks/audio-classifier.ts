@@ -3,6 +3,7 @@ import { AudioClassifierResult } from '@mediapipe/tasks-audio';
 // @ts-ignore
 import template from '../templates/audio-classifier.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 // @ts-ignore
 import AudioClassifierWorker from '../workers/audio-classifier.worker.ts?worker';
@@ -22,6 +23,11 @@ let canvasCtx: CanvasRenderingContext2D;
 // Options
 let maxResults = 3;
 let scoreThreshold = 0.02;
+let currentModel = 'yamnet';
+let modelSelector: ModelSelector;
+const models: Record<string, string> = {
+  'yamnet': 'https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/1/yamnet.tflite'
+};
 let currentDelegate: 'CPU' | 'GPU' = 'GPU'; // Default to GPU as requested
 let runningMode: 'AUDIO_STREAM' | 'AUDIO_CLIPS' = 'AUDIO_STREAM';
 // Visualization State
@@ -92,9 +98,12 @@ async function initializeClassifier() {
   // @ts-ignore
   const baseUrl = import.meta.env.BASE_URL;
 
-  // We use the same model asset path for now (Yamnet)
-  // URL: https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/1/yamnet.tflite
-  const modelPath = 'https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/1/yamnet.tflite';
+  let modelPath = models[currentModel];
+  if (currentModel === 'custom' && models['custom']) {
+    modelPath = models['custom'];
+  } else if (!modelPath.startsWith('http')) {
+    modelPath = new URL(modelPath, new URL(baseUrl, window.location.origin)).href;
+  }
 
   try {
     console.log(`[Main] Sending INIT to worker with model: ${modelPath} and wasmBase: ${baseUrl}`);
@@ -121,8 +130,7 @@ function handleWorkerMessage(event: MessageEvent) {
   switch (type) {
     case 'INIT_DONE':
       document.querySelector('.viewport')?.classList.remove('loading-model');
-      const progressContainer = document.querySelector('.progress-container') as HTMLElement;
-      if (progressContainer) progressContainer.style.display = 'none';
+      modelSelector?.hideProgress();
 
       isWorkerReady = true;
       updateStatus('Ready');
@@ -132,13 +140,8 @@ function handleWorkerMessage(event: MessageEvent) {
 
     case 'LOAD_PROGRESS':
       const { loaded, total } = event.data;
-      const percent = Math.round((loaded / total) * 100);
-      const progressBar = document.querySelector('.progress-bar') as HTMLElement;
-      const progressText = document.querySelector('.progress-text') as HTMLElement;
-      const pContainer = document.querySelector('.progress-container') as HTMLElement;
-      if (pContainer) pContainer.style.display = 'block';
-      if (progressBar) progressBar.style.width = `${percent}%`;
-      if (progressText) progressText.innerText = `Loading Model... ${percent}%`;
+      modelSelector?.showProgress(loaded, total);
+      if (loaded >= total) setTimeout(() => modelSelector?.hideProgress(), 500);
       break;
 
     case 'CLASSIFY_RESULT':
@@ -184,6 +187,22 @@ function setupUI() {
     'mic',
     (value) => {
       switchView(value === 'mic' ? 'MIC' : 'FILE');
+    }
+  );
+
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Yamnet (AudioSet)', value: 'yamnet', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
+      await initializeClassifier();
     }
   );
 

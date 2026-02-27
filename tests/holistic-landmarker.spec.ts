@@ -17,7 +17,7 @@ test.describe('Holistic Landmarker Task', () => {
     await expect(status).toHaveText('Ready', { timeout: 30000 });
 
     // 2. Select Image Tab (should be default)
-    const tabImage = page.locator('#tab-image');
+    const tabImage = page.locator('#view-mode-toggle button[data-value="image"]');
     await expect(tabImage).toHaveClass(/active/);
 
     // 3. Verify Default Image is present

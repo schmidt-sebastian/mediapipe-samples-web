@@ -4,7 +4,7 @@ export function renderSidebar(container: HTMLElement) {
       <button class="menu-toggle material-icons" style="margin-right: 12px; color: var(--text-secondary); background: none; border: none; font-size: 24px; cursor: pointer;">menu_open</button>
       <div class="sidebar-logo-text">
         <span class="material-icons" style="color: var(--primary); font-size: 32px;">analytics</span>
-        <span style="font-size: 1.5rem; font-weight: 600; color: var(--text-main);">MediaPipe Tasks</span>
+        <span style="font-weight: 600; color: var(--text-main);">MediaPipe Tasks</span>
       </div>
     </div>
     <nav class="sidebar-nav">

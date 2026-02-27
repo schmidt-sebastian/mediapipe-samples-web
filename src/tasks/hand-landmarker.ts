@@ -14,6 +14,7 @@ let drawingUtils: DrawingUtils | undefined;
 
 // Options
 let currentModel = 'hand_landmarker';
+let modelSelector: ModelSelector;
 let numHands = 2;
 let minHandDetectionConfidence = 0.5;
 let minHandPresenceConfidence = 0.5;
@@ -28,6 +29,7 @@ const models: Record<string, string> = {
 // @ts-ignore
 import template from '../templates/hand-landmarker.html?raw';
 import { ViewToggle } from '../components/view-toggle';
+import { ModelSelector } from '../components/model-selector';
 
 export async function setupHandLandmarker(container: HTMLElement) {
   container.innerHTML = template;
@@ -64,21 +66,11 @@ function handleWorkerMessage(event: MessageEvent) {
   switch (type) {
     case 'LOAD_PROGRESS':
       const { loaded, total } = event.data;
-      const progressContainer = document.getElementById('model-loading-progress');
-      const progressBar = progressContainer?.querySelector('.progress-bar') as HTMLElement;
-      const progressText = progressContainer?.querySelector('.progress-text') as HTMLElement;
-
-      if (progressContainer && progressBar && progressText) {
-        progressContainer.style.display = 'block';
-        const percent = Math.round((loaded / total) * 100);
-        progressBar.style.width = `${percent}%`;
-        progressText.innerText = `Loading Model... ${percent}%`;
-
-        if (percent >= 100) {
-          setTimeout(() => {
-            progressContainer.style.display = 'none';
-          }, 500);
-        }
+      modelSelector?.showProgress(loaded, total);
+      if (loaded >= total) {
+        setTimeout(() => {
+          modelSelector?.hideProgress();
+        }, 500);
       }
       break;
 
@@ -88,8 +80,7 @@ function handleWorkerMessage(event: MessageEvent) {
       enableWebcamButton.disabled = false;
       enableWebcamButton.innerText = 'Enable Webcam';
 
-      const pContainer = document.getElementById('model-loading-progress');
-      if (pContainer) pContainer.style.display = 'none';
+      modelSelector?.hideProgress();
 
       if (runningMode === 'VIDEO') {
         if (video.srcObject) {
@@ -221,37 +212,23 @@ function setupUI() {
 
   enableWebcamButton.addEventListener('click', toggleCam);
 
-  // Model Upload Logic
-  const tabModelList = document.getElementById('tab-model-list')!;
-  const tabModelUpload = document.getElementById('tab-model-upload')!;
-  const viewModelList = document.getElementById('view-model-list')!;
-  const viewModelUpload = document.getElementById('view-model-upload')!;
-
-  const switchModelTab = (tab: 'LIST' | 'UPLOAD') => {
-    if (tab === 'LIST') {
-      tabModelList.classList.add('active');
-      tabModelUpload.classList.remove('active');
-      viewModelList.classList.add('active');
-      viewModelUpload.classList.remove('active');
-      const select = document.getElementById('model-select') as HTMLSelectElement;
-      currentModel = select.value;
-      initializeLandmarker();
-    } else {
-      tabModelList.classList.remove('active');
-      tabModelUpload.classList.add('active');
-      viewModelList.classList.remove('active');
-      viewModelUpload.classList.add('active');
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Hand Landmarker', value: 'hand_landmarker', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
+      enableWebcamButton.innerText = 'Loading...';
+      enableWebcamButton.disabled = true;
+      await initializeLandmarker();
     }
-  };
-
-  tabModelList.addEventListener('click', () => switchModelTab('LIST'));
-  tabModelUpload.addEventListener('click', () => switchModelTab('UPLOAD'));
-
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
-  modelSelect.addEventListener('change', (e) => {
-    currentModel = (e.target as HTMLSelectElement).value;
-    initializeLandmarker();
-  });
+  );
 
   // Confidence Sliders
   const minHandDetectionConfidenceInput = document.getElementById('min-hand-detection-confidence') as HTMLInputElement;
@@ -416,6 +393,7 @@ async function enableCam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
+    document.getElementById('webcam-placeholder')?.classList.add('hidden');
 
     const playAndPredict = () => {
       video.play().catch(console.error);
@@ -451,6 +429,7 @@ function stopCam() {
     const stream = video.srcObject as MediaStream;
     stream.getTracks().forEach(t => t.stop());
     video.srcObject = null;
+    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
   }

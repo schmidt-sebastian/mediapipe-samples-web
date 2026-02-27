@@ -3,6 +3,7 @@ import template from '../templates/text-embedding.html?raw';
 // @ts-ignore
 import TextEmbeddingWorker from '../workers/text-embedding.worker?worker';
 
+import { ModelSelector } from '../components/model-selector';
 let worker: Worker | undefined;
 let isWorkerReady = false;
 
@@ -12,6 +13,7 @@ const models: Record<string, string> = {
 };
 
 let currentModel = 'universal_sentence_encoder';
+let modelSelector: ModelSelector;
 let currentDelegate: 'CPU' | 'GPU' = 'CPU';
 
 export async function setupTextEmbedding(container: HTMLElement) {
@@ -21,7 +23,7 @@ export async function setupTextEmbedding(container: HTMLElement) {
   const embedBtn = document.getElementById('embed-btn') as HTMLButtonElement;
   const textInput1 = document.getElementById('text-input-1') as HTMLTextAreaElement;
   const textInput2 = document.getElementById('text-input-2') as HTMLTextAreaElement;
-  const modelSelect = document.getElementById('model-select') as HTMLSelectElement;
+
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
 
   // Event Listeners
@@ -66,13 +68,22 @@ export async function setupTextEmbedding(container: HTMLElement) {
     });
   });
 
-  if (modelSelect) {
-    modelSelect.addEventListener('change', (e) => {
-      currentModel = (e.target as HTMLSelectElement).value;
+  modelSelector = new ModelSelector(
+    'model-selector-container',
+    [
+      { label: 'Universal Sentence Encoder', value: 'universal_sentence_encoder', isDefault: true }
+    ],
+    async (selection) => {
+      if (selection.type === 'standard') {
+        currentModel = selection.value;
+      } else if (selection.type === 'custom') {
+        models['custom'] = URL.createObjectURL(selection.file);
+        currentModel = 'custom';
+      }
       isWorkerReady = false;
-      initEmbedder();
-    });
-  }
+      await initEmbedder();
+    }
+  );
 
   if (delegateSelect) {
     delegateSelect.addEventListener('change', (e) => {
@@ -115,7 +126,7 @@ async function initEmbedder() {
   try {
     worker?.postMessage({
       type: 'INIT',
-      modelAssetPath: models[currentModel],
+      modelAssetPath: currentModel === 'custom' && models['custom'] ? models['custom'] : models[currentModel],
       delegate: currentDelegate,
       baseUrl: baseUrl
     });
@@ -163,6 +174,7 @@ function handleWorkerMessage(event: MessageEvent) {
   switch (type) {
     case 'LOAD_PROGRESS':
       const { loaded, total } = event.data;
+      modelSelector?.showProgress(loaded, total);
       if (loadingOverlay && total > 0) {
         const percent = Math.round((loaded / total) * 100);
         const loadingText = loadingOverlay.querySelector('.loading-text');
@@ -172,11 +184,13 @@ function handleWorkerMessage(event: MessageEvent) {
         const percent = Math.round((loaded / total) * 100);
         statusMessage.innerText = `Loading Model... ${percent}%`;
       }
+      if (loaded >= total) setTimeout(() => modelSelector?.hideProgress(), 500);
       break;
     case 'INIT_DONE':
       isWorkerReady = true;
       if ((window as any).embedLoadTimeout) clearTimeout((window as any).embedLoadTimeout);
 
+      modelSelector?.hideProgress();
       if (loadingOverlay) loadingOverlay.style.display = 'none';
       if (statusMessage) statusMessage.innerText = 'Ready';
       if (embedBtn) {

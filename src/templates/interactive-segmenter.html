@@ -1,18 +1,7 @@
 <div class="task-container">
   <div class="controls-panel">
     <div class="section-title">Model Selection</div>
-    <div class="tabs-container">
-      <div class="tab-button active" id="tab-model-list">Pre-trained Models</div>
-      <div class="tab-button" id="tab-model-upload" style="display: none;">Upload</div>
-    </div>
-
-    <div class="tab-content active" id="view-model-list">
-      <div class="select-wrapper">
-        <select id="model-select">
-          <option value="magic_touch" selected>Magic Touch (Default)</option>
-        </select>
-      </div>
-      </div>
+    <div id="model-selector-container"></div>
 
     <div class="divider"></div>
     
@@ -46,24 +35,32 @@
     <div class="viewport">
       <div id="view-image" class="view-content">
         <div class="upload-dropzone">
-          <div class="dropzone-content">
+          <div class="dropzone-content" style="display: none;">
             <span class="material-icons large-icon">image</span>
             <span>Drag & Drop or Click to Upload</span>
             <input type="file" id="image-upload" accept="image/*">
+          </div>
+          <div id="image-preview-container" class="preview-container">
+            <div class="canvas-wrapper">
+              <img id="test-image" src="cat.png" crossorigin="anonymous" />
+              <canvas id="output_canvas"></canvas>
             </div>
-            <div id="image-preview-container" class="preview-container">
-              <div class="canvas-wrapper">
-                <img id="test-image" src="cat.png" crossorigin="anonymous" />
-                <canvas id="output_canvas"></canvas>
-              </div>
-              </div>
-              </div>
+          </div>
+          <button id="re-upload-btn" class="action-button re-upload" style="display: flex;">
+            <span class="material-icons">upload</span> Upload New Image
+          </button>
+        </div>
               </div>
               
               <div id="view-webcam" class="view-content active">
                 <div class="cam-container">
                   <div class="video-wrapper">
-                    <video id="webcam" autoplay playsinline></video>
+                    
+    <div class="webcam-placeholder" id="webcam-placeholder">
+        <span class="material-icons">videocam_off</span>
+        <p>Webcam Disabled</p>
+    </div>
+    <video id="webcam" autoplay playsinline></video>
                     <canvas id="webcam-capture" class="webcam-capture"></canvas>
                     <canvas id="webcam-overlay" class="webcam-overlay"></canvas>
                   </div>

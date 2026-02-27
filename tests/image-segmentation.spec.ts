@@ -18,7 +18,7 @@ test.describe('Image Segmentation Task', () => {
     page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
     await page.waitForSelector('h2:has-text("Image Segmentation")');
     // Wait for the UI to be ready
-    await page.waitForSelector('#tab-image');
+    await page.waitForSelector('#view-mode-toggle button[data-value="image"]');
     // Wait for model to load
     // Wait for model to load - can take a while on CPU
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Done)|(Ready)/, { timeout: 120000 });
@@ -36,7 +36,7 @@ test.describe('Image Segmentation Task', () => {
   });
 
   test('should load with default settings', async ({ page }) => {
-    await expect(page.locator('#model-select')).toHaveValue('deeplab_v3');
+    await expect(page.locator('.model-select')).toHaveValue('deeplab_v3');
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
     await expect(page.locator('#output-type')).toHaveValue('CATEGORY_MASK');
   });
@@ -45,7 +45,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -62,7 +62,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -86,7 +86,7 @@ test.describe('Image Segmentation Task', () => {
     await page.selectOption('#output-type', 'CONFIDENCE_MASKS');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -110,7 +110,7 @@ test.describe('Image Segmentation Task', () => {
     await page.goto('?delegate=GPU#/vision/image_segmenter');
     await page.waitForSelector('h2:has-text("Image Segmentation")');
     // Wait for the UI to be ready
-    await page.waitForSelector('#tab-image');
+    await page.waitForSelector('#view-mode-toggle button[data-value="image"]');
     // Wait for model to load (might be slower on emulated GPU)
     // Wait for model to load (might be slower on emulated GPU)
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Done)|(Ready)/, { timeout: 60000 });
@@ -118,7 +118,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#delegate-select')).toHaveValue(/GPU|CPU/);
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -129,14 +129,14 @@ test.describe('Image Segmentation Task', () => {
   });
 
   test('should handle model switching', async ({ page }) => {
-    await page.selectOption('#model-select', 'hair_segmenter');
+    await page.selectOption('.model-select', 'hair_segmenter');
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)|(Done)/, { timeout: 60000 });
 
     // Wait for worker re-instantiation to fully commit DOM layout reflow
     await page.waitForTimeout(1000);
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone', { force: true });
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -147,7 +147,7 @@ test.describe('Image Segmentation Task', () => {
 
   test('should handle opacity changes', async ({ page }) => {
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
@@ -166,7 +166,7 @@ test.describe('Image Segmentation Task', () => {
   });
 
   test('should support webcam toggling', async ({ page }) => {
-    await page.click('#tab-webcam');
+    await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     await expect(page.locator('#webcamButton')).not.toHaveText('Initializing...', { timeout: 15000 });
@@ -194,7 +194,7 @@ test.describe('Image Segmentation Task', () => {
 
     // Verify it detects
     const imgChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-image');
+    await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
     const imgChooser = await imgChooserPromise;
     await imgChooser.setFiles(imagePath);

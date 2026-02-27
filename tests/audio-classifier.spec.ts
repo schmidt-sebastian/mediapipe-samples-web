@@ -28,13 +28,13 @@ test.describe('Audio Classifier Task', () => {
   });
 
   test('should show model selection', async ({ page }) => {
-    const modelSelect = page.locator('#model-select');
+    const modelSelect = page.locator('.model-select');
     await expect(modelSelect).toBeVisible();
     await expect(modelSelect).toHaveValue('yamnet');
   });
 
   test('should switch between microphone and file tabs', async ({ page }) => {
-    const tabFile = page.locator('#tab-file');
+    const tabFile = page.locator('#view-mode-toggle button[data-value="file"]');
     const viewFile = page.locator('#view-file');
     const viewMic = page.locator('#view-microphone');
 
@@ -86,7 +86,7 @@ test.describe('Audio Classifier Task', () => {
   });
 
   test('should layout file upload view correctly', async ({ page }) => {
-    await page.click('#tab-file');
+    await page.click('#view-mode-toggle button[data-value="file"]');
 
     // Simulate file upload state (since we can't easily upload in this env without a real file)
     // We'll just check the structure that SHOULD be there
@@ -144,7 +144,7 @@ test.describe('Audio Classifier Task', () => {
 
   test('should support drag and drop for audio upload', async ({ page }) => {
     // Switch to File tab
-    await page.click('#tab-file');
+    await page.click('#view-mode-toggle button[data-value="file"]');
 
     const dropzone = page.locator('.upload-dropzone');
     await expect(dropzone).toBeVisible();
