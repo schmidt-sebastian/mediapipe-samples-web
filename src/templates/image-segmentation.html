@@ -3,33 +3,7 @@
     <div class="controls-panel">
         <!-- Model Section -->
         <div class="section-title">Model Selection</div>
-        <div class="tabs-container">
-            <button id="tab-model-list" class="tab-button active">
-                <span class="material-icons">grid_view</span> Standard
-            </button>
-            <button id="tab-model-upload" class="tab-button">
-                <span class="material-icons">upload</span> Upload
-            </button>
-        </div>
-
-        <div id="view-model-list" class="tab-content active">
-            <div class="select-wrapper">
-                <select id="model-select">
-                    <option value="deeplab_v3" selected>DeepLab V3</option>
-                    <option value="hair_segmenter">Hair Segmenter</option>
-                    <option value="selfie_segmenter">Selfie Segmenter</option>
-                    <option value="selfie_multiclass">Selfie Multi-class</option>
-                </select>
-            </div>
-        </div>
-
-        <div id="view-model-upload" class="tab-content">
-            <label class="file-upload-btn">
-                Choose .tflite File
-                <input type="file" id="model-upload" accept=".tflite">
-            </label>
-            <div id="upload-status" class="status-text">No file chosen</div>
-        </div>
+        <div id="model-selector-container"></div>
 
         <div class="divider"></div>
 

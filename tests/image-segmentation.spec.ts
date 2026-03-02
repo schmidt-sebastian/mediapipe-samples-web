@@ -184,7 +184,7 @@ test.describe('Image Segmentation Task', () => {
 
     // Switch to upload tab and provide file
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-model-upload');
+    await page.click('#model-selector-container-toggle button[data-value="upload"]');
     await page.click('.file-upload-btn');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(modelPath);
