@@ -131,12 +131,12 @@ test.describe('Object Detection Task', () => {
     const modelPath = path.resolve(__dirname, 'assets', 'efficientdet_lite0.tflite');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#tab-model-upload');
+    await page.click('#model-selector-container-toggle button[data-value="upload"]');
     await page.click('.file-upload-btn');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(modelPath);
 
-    await expect(page.locator('#upload-status')).toHaveText('efficientdet_lite0.tflite');
+    await expect(page.locator('.upload-status')).toHaveText('efficientdet_lite0.tflite');
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)|(Done)/, { timeout: 90000 });
 
     // Verify it still detects
