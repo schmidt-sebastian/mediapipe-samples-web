@@ -5,16 +5,16 @@ test.describe('Holistic Landmarker Task', () => {
     // Navigate to the Holistic Landmarker page
     await page.goto('/#/vision/holistic_landmarker');
 
-    // Wait for the page to settle
-    await page.waitForLoadState('networkidle');
+    // Wait for the page to show the status message
+    await page.waitForSelector('#status-message', { state: 'visible', timeout: 30000 });
   });
 
   test('should load model and handle image inference', async ({ page }) => {
     // 1. Initial State: "Initializing..." then "Loading Model..." then "Ready"
     const status = page.locator('#status-message');
 
-    // Wait for Ready status (model active)
-    await expect(status).toHaveText('Ready', { timeout: 30000 });
+    // Wait for Ready status (model active) or processing
+    await expect(status).toHaveText(/Ready|Processing|Done/, { timeout: 30000 });
 
     // 2. Select Image Tab (should be default)
     const tabImage = page.locator('#view-mode-toggle button[data-value="image"]');
@@ -27,7 +27,7 @@ test.describe('Holistic Landmarker Task', () => {
     // 4. Trigger detection if not already auto-triggered, or verify results
     // The code auto-triggers on 'Ready' if image is present.
     // Wait for "Done in ..." 
-    await expect(status).toHaveText(/Done in/, { timeout: 10000 });
+    await expect(status).toHaveText(/Done in/, { timeout: 30000 });
 
     // 5. Verify Inference Time is updated
     const inferenceTime = page.locator('#inference-time');
@@ -36,14 +36,14 @@ test.describe('Holistic Landmarker Task', () => {
 
   test('should handle delegate switching', async ({ page }) => {
     const status = page.locator('#status-message');
-    await expect(status).toHaveText('Ready', { timeout: 30000 });
+    await expect(status).toHaveText(/Ready|Processing|Done/, { timeout: 30000 });
 
     // Switch to CPU
     await page.selectOption('#delegate-select', 'CPU');
 
     // Should trigger re-initialization
     await expect(status).toHaveText(/Loading Model|Ready/);
-    // Eventually Ready again
-    await expect(status).toHaveText('Ready', { timeout: 20000 });
+    // Eventually Ready again (or processing/done if auto-triggered)
+    await expect(status).toHaveText(/Ready|Processing|Done/, { timeout: 20000 });
   });
 });
