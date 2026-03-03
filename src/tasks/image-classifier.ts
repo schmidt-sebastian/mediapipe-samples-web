@@ -1,13 +1,14 @@
 import { ImageClassifierResult } from '@mediapipe/tasks-vision';
+import { ClassificationResult, ClassificationItem } from '../components/classification-result';
+import { ModelSelector } from '../components/model-selector';
+import { MediaManager } from '../components/media-manager';
+// @ts-ignore
+import template from '../templates/image-classifier.html?raw';
+// @ts-ignore
+import ImageClassifierWorker from '../workers/image-classifier.worker.ts?worker';
 
 let worker: Worker | undefined;
-let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
-let video: HTMLVideoElement;
-let enableWebcamButton: HTMLButtonElement;
-let lastVideoTimeSeconds = -1;
-let lastTimestampMs = -1;
-let animationFrameId: number;
-let isWorkerReady = false;
+let mediaManager: MediaManager;
 
 // Options
 let currentModel = 'efficientnet_lite0';
@@ -21,25 +22,60 @@ const models: Record<string, string> = {
   'efficientnet_lite2': 'https://storage.googleapis.com/mediapipe-models/image_classifier/efficientnet_lite2/float32/1/efficientnet_lite2.tflite'
 };
 
-// @ts-ignore
-// @ts-ignore
-import template from '../templates/image-classifier.html?raw';
-import { ViewToggle } from '../components/view-toggle';
-import { ModelSelector } from '../components/model-selector';
+let classificationResultUI: ClassificationResult;
 
 export async function setupImageClassifier(container: HTMLElement) {
   container.innerHTML = template;
 
-  video = document.getElementById('webcam') as HTMLVideoElement;
-  enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
+  classificationResultUI = new ClassificationResult('classification-results');
 
   initWorker();
   setupUI();
+
+  mediaManager = new MediaManager({
+    onModeChange: (mode) => {
+      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: mode });
+    },
+    onImageUpload: (image) => {
+      classifyImage(image);
+    },
+    onWebcamFrame: (video, timestampMs) => {
+      if (!worker || !mediaManager.isWorkerReady) {
+        mediaManager.requestNextFrame();
+        return;
+      }
+      try {
+        let bitmapPromise: Promise<ImageBitmap>;
+        if (navigator.webdriver) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = video.videoWidth || 640;
+          tempCanvas.height = video.videoHeight || 480;
+          const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+          ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+          bitmapPromise = window.createImageBitmap(tempCanvas);
+        } else {
+          bitmapPromise = window.createImageBitmap(video);
+        }
+
+        bitmapPromise.then(bitmap => {
+          worker?.postMessage({
+            type: 'CLASSIFY_VIDEO',
+            bitmap: bitmap,
+            timestampMs: timestampMs
+          }, [bitmap]);
+        }).catch(err => {
+          console.error("Failed to create ImageBitmap", err);
+          mediaManager.requestNextFrame();
+        });
+      } catch (e) {
+        console.error("Failed to process webcam frame", e);
+        mediaManager.requestNextFrame();
+      }
+    }
+  });
+
   await initializeClassifier();
 }
-
-// @ts-ignore
-import ImageClassifierWorker from '../workers/image-classifier.worker.ts?worker';
 
 function initWorker() {
   if (!worker) {
@@ -72,20 +108,13 @@ function handleWorkerMessage(event: MessageEvent) {
     case 'INIT_DONE':
       modelSelector?.hideProgress();
       document.querySelector('.viewport')?.classList.remove('loading-model');
-      isWorkerReady = true;
-      enableWebcamButton.disabled = false;
-      enableWebcamButton.innerText = 'Enable Webcam';
+      mediaManager?.setWorkerReady(true);
       updateStatus('Ready');
 
-      if (runningMode === 'VIDEO') {
-        if (video.srcObject) {
-          enableCam();
-        }
-      } else if (runningMode === 'IMAGE') {
-        const testImage = document.getElementById('test-image') as HTMLImageElement;
-        if (testImage.style.display !== 'none' && testImage.src) {
-          triggerImageClassification(testImage);
-        }
+      if (mediaManager?.getRunningMode() === 'VIDEO') {
+        mediaManager.enableCam();
+      } else {
+        mediaManager.triggerImageAction();
       }
       break;
 
@@ -94,13 +123,9 @@ function handleWorkerMessage(event: MessageEvent) {
       updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
       updateInferenceTime(inferenceTime);
 
-      if (mode === 'IMAGE') {
-        displayResult(result);
-      } else if (mode === 'VIDEO') {
-        displayResult(result);
-        if (video.srcObject && !video.paused) {
-          animationFrameId = window.requestAnimationFrame(predictWebcam);
-        }
+      displayResult(result);
+      if (mode === 'VIDEO') {
+        mediaManager?.requestNextFrame();
       }
       break;
 
@@ -111,25 +136,9 @@ function handleWorkerMessage(event: MessageEvent) {
   }
 }
 
-function triggerImageClassification(image: HTMLImageElement) {
-  if (image.complete && image.naturalWidth > 0) {
-    classifyImage(image);
-  } else {
-    image.onload = () => {
-      if (image.naturalWidth > 0) {
-        classifyImage(image);
-      }
-    };
-  }
-}
-
 async function initializeClassifier() {
-  enableWebcamButton.disabled = true;
-  if (!video.srcObject) {
-    enableWebcamButton.innerText = 'Initializing...';
-  }
+  mediaManager?.setWorkerReady(false);
   document.querySelector('.viewport')?.classList.add('loading-model');
-  isWorkerReady = false;
   updateStatus('Loading Model...');
 
   // @ts-ignore
@@ -140,7 +149,7 @@ async function initializeClassifier() {
     type: 'INIT',
     modelAssetPath: modelPath,
     delegate: currentDelegate,
-    runningMode,
+    runningMode: mediaManager?.getRunningMode() || 'IMAGE',
     maxResults,
     scoreThreshold,
     baseUrl
@@ -148,50 +157,6 @@ async function initializeClassifier() {
 }
 
 function setupUI() {
-  const viewWebcam = document.getElementById('view-webcam')!;
-  const viewImage = document.getElementById('view-image')!;
-
-  const switchView = (mode: 'VIDEO' | 'IMAGE') => {
-    localStorage.setItem('mediapipe-running-mode', mode);
-    if (mode === 'VIDEO') {
-      viewWebcam.classList.add('active');
-      viewImage.classList.remove('active');
-      runningMode = 'VIDEO';
-      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
-      enableCam();
-    } else {
-      viewWebcam.classList.remove('active');
-      viewImage.classList.add('active');
-      runningMode = 'IMAGE';
-      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'IMAGE' });
-      stopCam();
-
-      if (isWorkerReady) {
-        const testImage = document.getElementById('test-image') as HTMLImageElement;
-        if (testImage && testImage.src) triggerImageClassification(testImage);
-      }
-    }
-  };
-
-  const storedMode = localStorage.getItem('mediapipe-running-mode') as 'VIDEO' | 'IMAGE';
-  const initialMode = storedMode || 'IMAGE';
-
-  new ViewToggle(
-    'view-mode-toggle',
-    [
-      { label: 'Webcam', value: 'video' },
-      { label: 'Image', value: 'image' }
-    ],
-    initialMode.toLowerCase(),
-    (value) => {
-      switchView(value === 'video' ? 'VIDEO' : 'IMAGE');
-    }
-  );
-
-  switchView(initialMode);
-
-  enableWebcamButton.addEventListener('click', toggleCam);
-
   modelSelector = new ModelSelector(
     'model-selector-container',
     [
@@ -205,8 +170,6 @@ function setupUI() {
         models['custom'] = URL.createObjectURL(selection.file);
         currentModel = 'custom';
       }
-      enableWebcamButton.innerText = 'Loading...';
-      enableWebcamButton.disabled = true;
       await initializeClassifier();
     }
   );
@@ -224,7 +187,7 @@ function setupUI() {
     maxResults = parseInt(maxResultsInput.value);
     maxResultsValue.innerText = maxResults.toString();
     worker?.postMessage({ type: 'SET_OPTIONS', maxResults });
-    if (runningMode === 'IMAGE') reRunImageClassification();
+    if (mediaManager?.getRunningMode() === 'IMAGE') reRunImageClassification();
   });
 
   const scoreThresholdInput = document.getElementById('score-threshold') as HTMLInputElement;
@@ -233,48 +196,16 @@ function setupUI() {
     scoreThreshold = parseInt(scoreThresholdInput.value) / 100;
     scoreThresholdValue.innerText = `${parseInt(scoreThresholdInput.value)}%`;
     worker?.postMessage({ type: 'SET_OPTIONS', scoreThreshold });
-    if (runningMode === 'IMAGE') reRunImageClassification();
-  });
-
-  const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
-  const imagePreviewContainer = document.getElementById('image-preview-container')!;
-  const testImage = document.getElementById('test-image') as HTMLImageElement;
-  const dropzone = document.querySelector('.upload-dropzone') as HTMLElement;
-  const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-
-  if (testImage.src && dropzoneContent) {
-    dropzoneContent.style.display = 'none';
-  }
-
-  if (dropzone) dropzone.addEventListener('click', () => imageUpload.click());
-
-  imageUpload.addEventListener('change', (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        testImage.src = e.target?.result as string;
-        imagePreviewContainer.style.display = '';
-        const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-        if (dropzoneContent) dropzoneContent.style.display = 'none';
-
-        triggerImageClassification(testImage);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (mediaManager?.getRunningMode() === 'IMAGE') reRunImageClassification();
   });
 }
 
 function reRunImageClassification() {
-  const testImage = document.getElementById('test-image') as HTMLImageElement;
-  if (testImage && testImage.src && testImage.naturalWidth > 0) {
-    classifyImage(testImage);
-  }
+  mediaManager?.triggerImageAction();
 }
 
 async function classifyImage(image: HTMLImageElement) {
-  if (!worker || !isWorkerReady) return;
-  if (runningMode !== 'IMAGE') runningMode = 'IMAGE';
+  if (!worker || !mediaManager?.isWorkerReady) return;
 
   const bitmap = await createImageBitmap(image);
   updateStatus(`Processing image...`);
@@ -286,126 +217,17 @@ async function classifyImage(image: HTMLImageElement) {
 }
 
 function displayResult(result: ImageClassifierResult) {
-  const resultsContainer = document.getElementById('classification-results');
-  if (!resultsContainer) return;
+  if (!classificationResultUI) return;
 
-  resultsContainer.innerHTML = '';
-  
   if (result.classifications && result.classifications.length > 0) {
     const categories = result.classifications[0].categories;
-    
-    if (categories.length === 0) {
-      resultsContainer.innerHTML = '<div class="no-results">No categories found matching criteria</div>';
-      return;
-    }
-
-    categories.forEach(category => {
-      const scorePercent = Math.round(category.score * 100);
-      const row = document.createElement('div');
-      row.className = 'classification-row';
-      row.innerHTML = `
-        <div class="category-name">${category.categoryName || 'Unknown'}</div>
-        <div class="score-container">
-          <div class="score-track">
-            <div class="score-fill" style="width: ${scorePercent}%"></div>
-          </div>
-          <div class="score-text">${scorePercent}%</div>
-        </div>
-      `;
-      resultsContainer.appendChild(row);
-    });
-  }
-}
-
-async function enableCam() {
-  if (!worker || video.srcObject) return;
-
-  enableWebcamButton.innerText = 'Starting...';
-  enableWebcamButton.disabled = true;
-  const constraints = { video: true };
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    document.getElementById('webcam-placeholder')?.classList.add('hidden');
-
-    const playAndPredict = () => {
-      video.play().catch(console.error);
-      predictWebcam();
-    };
-
-    if (video.readyState >= 2) {
-      playAndPredict();
-    } else {
-      video.addEventListener('loadeddata', playAndPredict, { once: true });
-    }
-
-    runningMode = 'VIDEO';
-    worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
-    updateStatus('Webcam running...');
-    enableWebcamButton.innerText = 'Disable Webcam';
-    enableWebcamButton.disabled = false;
-  } catch (err) {
-    console.error(err);
-    updateStatus('Camera error!');
-    enableWebcamButton.innerText = 'Enable Webcam';
-    enableWebcamButton.disabled = false;
-  }
-}
-
-function toggleCam() {
-  if (video.srcObject) stopCam();
-  else enableCam();
-}
-
-function stopCam() {
-  if (video.srcObject) {
-    const stream = video.srcObject as MediaStream;
-    stream.getTracks().forEach(t => t.stop());
-    video.srcObject = null;
-    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
-    enableWebcamButton.innerText = 'Enable Webcam';
-    cancelAnimationFrame(animationFrameId);
-  }
-}
-
-async function predictWebcam() {
-  if (runningMode === 'IMAGE') runningMode = 'VIDEO';
-  if (!isWorkerReady || !worker) {
-    animationFrameId = window.requestAnimationFrame(predictWebcam);
-    return;
-  }
-
-  if (video.currentTime !== lastVideoTimeSeconds) {
-    lastVideoTimeSeconds = video.currentTime;
-    try {
-      let bitmap: ImageBitmap;
-      if (navigator.webdriver) {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth || 640;
-        tempCanvas.height = video.videoHeight || 480;
-        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        bitmap = await window.createImageBitmap(tempCanvas);
-      } else {
-        bitmap = await window.createImageBitmap(video);
-      }
-
-      const now = performance.now();
-      const timestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
-      lastTimestampMs = timestampMs;
-
-      worker.postMessage({
-        type: 'CLASSIFY_VIDEO',
-        bitmap: bitmap,
-        timestampMs: timestampMs
-      }, [bitmap]);
-    } catch (e) {
-      console.error("Failed to create ImageBitmap", e);
-      animationFrameId = window.requestAnimationFrame(predictWebcam);
-    }
+    const items: ClassificationItem[] = categories.map(c => ({
+      label: c.categoryName,
+      score: c.score
+    }));
+    classificationResultUI.updateResults(items);
   } else {
-    animationFrameId = window.requestAnimationFrame(predictWebcam);
+    classificationResultUI.clear();
   }
 }
 
@@ -420,12 +242,11 @@ function updateInferenceTime(time: number) {
 }
 
 export function cleanupImageClassifier() {
-  if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  stopCam();
+  if (mediaManager) mediaManager.cleanup();
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
     worker.terminate();
     worker = undefined;
   }
-  isWorkerReady = false;
 }
+

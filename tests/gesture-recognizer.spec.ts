@@ -19,7 +19,7 @@ test.describe('Gesture Recognizer Task', () => {
 
     // Wait for result
     await expect(page.locator('#status-message')).toHaveText(/Done in/, { timeout: 15000 });
-    await expect(page.locator('#gesture-output')).not.toBeEmpty();
+    await expect(page.locator('#classification-results')).not.toBeEmpty();
 
     // Check inference time display
     await expect(page.locator('#inference-time')).toContainText('Inference Time:');

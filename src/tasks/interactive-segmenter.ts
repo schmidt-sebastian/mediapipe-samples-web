@@ -256,6 +256,7 @@ function setupUI() {
         viewImage.style.display = 'none';
         viewWebcam.classList.add('active');
         viewImage.classList.remove('active');
+        // Let's actually trigger enable webcam if it's the active tab, but only on selection
       } else {
         viewImage.style.display = '';
         viewWebcam.style.display = 'none';
@@ -264,6 +265,14 @@ function setupUI() {
       }
     }
   );
+
+  // Initialize view properly on load
+  const viewToggleButtons = document.querySelectorAll('#view-mode-toggle button');
+  viewToggleButtons.forEach(btn => {
+    if ((btn as HTMLButtonElement).dataset.value === 'webcam') {
+      btn.classList.add('active'); // Ensure initial state matches
+    }
+  });
 
   modelSelector = new ModelSelector(
     'model-selector-container',

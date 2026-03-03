@@ -1047,6 +1047,7 @@ video {
   flex-direction: column;
   gap: 12px;
   width: 100%;
+  min-height: 160px;
 }
 
 .classification-row {

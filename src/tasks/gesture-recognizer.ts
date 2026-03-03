@@ -1,15 +1,16 @@
 import { GestureRecognizerResult, DrawingUtils, HandLandmarker } from '@mediapipe/tasks-vision';
+import { ModelSelector } from '../components/model-selector';
+import { ClassificationResult, ClassificationItem } from '../components/classification-result';
+import { MediaManager } from '../components/media-manager';
+// @ts-ignore
+import template from '../templates/gesture-recognizer.html?raw';
+// @ts-ignore
+import GestureRecognizerWorker from '../workers/gesture-recognizer.worker.ts?worker';
 
 let worker: Worker | undefined;
-let runningMode: 'IMAGE' | 'VIDEO' = 'IMAGE';
-let video: HTMLVideoElement;
+let mediaManager: MediaManager;
 let canvasElement: HTMLCanvasElement;
 let canvasCtx: CanvasRenderingContext2D;
-let enableWebcamButton: HTMLButtonElement;
-let lastVideoTimeSeconds = -1;
-let lastTimestampMs = -1;
-let animationFrameId: number;
-let isWorkerReady = false;
 let drawingUtils: DrawingUtils | undefined;
 
 // Options
@@ -25,28 +26,68 @@ const models: Record<string, string> = {
   'gesture_recognizer': 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task'
 };
 
-// @ts-ignore
-// @ts-ignore
-import template from '../templates/gesture-recognizer.html?raw';
-import { ViewToggle } from '../components/view-toggle';
-import { ModelSelector } from '../components/model-selector';
+let classificationResultUI: ClassificationResult;
 
 export async function setupGestureRecognizer(container: HTMLElement) {
   container.innerHTML = template;
 
-  video = document.getElementById('webcam') as HTMLVideoElement;
   canvasElement = document.getElementById('output_canvas') as HTMLCanvasElement;
   canvasCtx = canvasElement.getContext('2d')!;
-  enableWebcamButton = document.getElementById('webcamButton') as HTMLButtonElement;
   drawingUtils = new DrawingUtils(canvasCtx);
+
+  classificationResultUI = new ClassificationResult('classification-results'); 
 
   initWorker();
   setupUI();
+
+  mediaManager = new MediaManager({
+    onModeChange: (mode) => {
+      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: mode });
+    },
+    onImageUpload: (image) => {
+      detectImage(image);
+      const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
+      const imagePreviewContainer = document.getElementById('image-preview-container');
+      if (dropzoneContent) dropzoneContent.style.display = 'none';
+      if (imagePreviewContainer) imagePreviewContainer.style.display = '';
+    },
+    onWebcamFrame: (video, timestampMs) => {
+      if (!worker || !mediaManager.isWorkerReady) {
+        mediaManager.requestNextFrame();
+        return;
+      }
+      try {
+        let bitmapPromise: Promise<ImageBitmap>;
+        if (navigator.webdriver) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = video.videoWidth || 640;
+          tempCanvas.height = video.videoHeight || 480;
+          const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+          ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+          bitmapPromise = window.createImageBitmap(tempCanvas);
+        } else {
+          bitmapPromise = window.createImageBitmap(video);
+        }
+
+        bitmapPromise.then(bitmap => {
+          worker?.postMessage({
+            type: 'DETECT_VIDEO',
+            bitmap: bitmap,
+            timestampMs: timestampMs
+          }, [bitmap]);
+        }).catch(err => {
+          console.error("Failed to create ImageBitmap", err);
+          mediaManager.requestNextFrame();
+        });
+      } catch (e) {
+        console.error("Failed to process webcam frame", e);
+        mediaManager.requestNextFrame();
+      }
+    }
+  });
+
   await initializeRecognizer();
 }
-
-// @ts-ignore
-import GestureRecognizerWorker from '../workers/gesture-recognizer.worker.ts?worker';
 
 function initWorker() {
   if (!worker) {
@@ -73,22 +114,15 @@ function handleWorkerMessage(event: MessageEvent) {
 
     case 'INIT_DONE':
       document.querySelector('.viewport')?.classList.remove('loading-model');
-      isWorkerReady = true;
-      enableWebcamButton.disabled = false;
-      enableWebcamButton.innerText = 'Enable Webcam';
+      mediaManager?.setWorkerReady(true);
       updateStatus('Ready');
 
       modelSelector?.hideProgress();
 
-      if (runningMode === 'VIDEO') {
-        if (video.srcObject) {
-          enableCam();
-        }
-      } else if (runningMode === 'IMAGE') {
-        const testImage = document.getElementById('test-image') as HTMLImageElement;
-        if (testImage.style.display !== 'none' && testImage.src) {
-          triggerImageDetection(testImage);
-        }
+      if (mediaManager?.getRunningMode() === 'VIDEO') {
+        mediaManager.enableCam();
+      } else {
+        mediaManager.triggerImageAction();
       }
       break;
 
@@ -108,9 +142,7 @@ function handleWorkerMessage(event: MessageEvent) {
         displayImageResult(result);
       } else if (mode === 'VIDEO') {
         displayVideoResult(result);
-        if (video.srcObject && !video.paused) {
-          animationFrameId = window.requestAnimationFrame(predictWebcam);
-        }
+        mediaManager?.requestNextFrame();
       }
       break;
 
@@ -122,34 +154,9 @@ function handleWorkerMessage(event: MessageEvent) {
   }
 }
 
-function triggerImageDetection(image: HTMLImageElement) {
-  if (image.complete && image.naturalWidth > 0) {
-    detectImage(image);
-    hideDropzone();
-  } else {
-    image.onload = () => {
-      if (image.naturalWidth > 0) {
-        detectImage(image);
-        hideDropzone();
-      }
-    };
-  }
-}
-
-function hideDropzone() {
-  const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-  const imagePreviewContainer = document.getElementById('image-preview-container');
-  if (dropzoneContent) dropzoneContent.style.display = 'none';
-  if (imagePreviewContainer) imagePreviewContainer.style.display = '';
-}
-
 async function initializeRecognizer() {
-  enableWebcamButton.disabled = true;
-  if (!video.srcObject) {
-    enableWebcamButton.innerText = 'Initializing...';
-  }
+  mediaManager?.setWorkerReady(false);
   document.querySelector('.viewport')?.classList.add('loading-model');
-  isWorkerReady = false;
   updateStatus('Loading Model...');
 
   // @ts-ignore
@@ -169,54 +176,12 @@ async function initializeRecognizer() {
     minHandPresenceConfidence,
     minTrackingConfidence,
     numHands,
-    runningMode,
+    runningMode: mediaManager?.getRunningMode() || 'IMAGE',
     baseUrl
   });
 }
 
 function setupUI() {
-  const viewWebcam = document.getElementById('view-webcam')!;
-  const viewImage = document.getElementById('view-image')!;
-
-  const switchView = (mode: 'VIDEO' | 'IMAGE') => {
-    localStorage.setItem('mediapipe-running-mode', mode);
-    if (mode === 'VIDEO') {
-      viewWebcam.classList.add('active');
-      viewImage.classList.remove('active');
-      runningMode = 'VIDEO';
-      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
-      enableCam();
-    } else {
-      viewWebcam.classList.remove('active');
-      viewImage.classList.add('active');
-      runningMode = 'IMAGE';
-      worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'IMAGE' });
-      stopCam();
-
-      if (isWorkerReady) {
-        const testImage = document.getElementById('test-image') as HTMLImageElement;
-        if (testImage && testImage.src) triggerImageDetection(testImage);
-      }
-    }
-  };
-
-  const storedMode = localStorage.getItem('mediapipe-running-mode') as 'VIDEO' | 'IMAGE';
-  const initialMode = storedMode || 'IMAGE';
-
-  new ViewToggle(
-    'view-mode-toggle',
-    [
-      { label: 'Webcam', value: 'video' },
-      { label: 'Image', value: 'image' }
-    ],
-    initialMode.toLowerCase(),
-    (value) => {
-      switchView(value === 'video' ? 'VIDEO' : 'IMAGE');
-    }
-  );
-
-  switchView(initialMode);
-
   modelSelector = new ModelSelector(
     'model-selector-container',
     [
@@ -229,13 +194,9 @@ function setupUI() {
         models['custom'] = URL.createObjectURL(selection.file);
         currentModel = 'custom';
       }
-      enableWebcamButton.innerText = 'Loading...';
-      enableWebcamButton.disabled = true;
       await initializeRecognizer();
     }
   );
-
-  enableWebcamButton.addEventListener('click', toggleCam);
 
   // Sliders
   const setupSlider = (id: string, onChange: (val: number) => void) => {
@@ -253,25 +214,25 @@ function setupUI() {
   setupSlider('num-hands', (val) => {
     numHands = val;
     worker?.postMessage({ type: 'SET_OPTIONS', numHands: numHands });
-    if (runningMode === 'IMAGE') reRunImageDetection();
+    if (mediaManager?.getRunningMode() === 'IMAGE') reRunImageDetection();
   });
 
   setupSlider('min-hand-detection-confidence', (val) => {
     minHandDetectionConfidence = val;
     worker?.postMessage({ type: 'SET_OPTIONS', minHandDetectionConfidence: minHandDetectionConfidence });
-    if (runningMode === 'IMAGE') reRunImageDetection();
+    if (mediaManager?.getRunningMode() === 'IMAGE') reRunImageDetection();
   });
 
   setupSlider('min-hand-presence-confidence', (val) => {
     minHandPresenceConfidence = val;
     worker?.postMessage({ type: 'SET_OPTIONS', minHandPresenceConfidence: minHandPresenceConfidence });
-    if (runningMode === 'IMAGE') reRunImageDetection();
+    if (mediaManager?.getRunningMode() === 'IMAGE') reRunImageDetection();
   });
 
   setupSlider('min-tracking-confidence', (val) => {
     minTrackingConfidence = val;
     worker?.postMessage({ type: 'SET_OPTIONS', minTrackingConfidence: minTrackingConfidence });
-    if (runningMode === 'IMAGE') reRunImageDetection();
+    if (mediaManager?.getRunningMode() === 'IMAGE') reRunImageDetection();
   });
 
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
@@ -280,50 +241,14 @@ function setupUI() {
     await initializeRecognizer();
   });
   delegateSelect.value = currentDelegate;
-
-  // Image Upload
-  const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
-  const imagePreviewContainer = document.getElementById('image-preview-container')!;
-  const testImage = document.getElementById('test-image') as HTMLImageElement;
-  const dropzone = document.querySelector('.upload-dropzone') as HTMLElement;
-  const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-
-  // Hide dropzone content if we have a default image
-  if (testImage.src && dropzoneContent) {
-    dropzoneContent.style.display = 'none';
-  }
-
-  if (dropzone) dropzone.addEventListener('click', () => imageUpload.click());
-
-  imageUpload.addEventListener('change', (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        testImage.src = e.target?.result as string;
-        imagePreviewContainer.style.display = '';
-        const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
-        if (dropzoneContent) dropzoneContent.style.display = 'none';
-
-        triggerImageDetection(testImage);
-      };
-      reader.readAsDataURL(file);
-    }
-  });
-
-
 }
 
 function reRunImageDetection() {
-  const testImage = document.getElementById('test-image') as HTMLImageElement;
-  if (testImage && testImage.src && testImage.naturalWidth > 0) {
-    detectImage(testImage);
-  }
+  mediaManager?.triggerImageAction();
 }
 
 async function detectImage(image: HTMLImageElement) {
-  if (!worker || !isWorkerReady) return;
-  if (runningMode !== 'IMAGE') runningMode = 'IMAGE';
+  if (!worker || !mediaManager?.isWorkerReady) return;
 
   const bitmap = await createImageBitmap(image);
   updateStatus(`Processing image...`);
@@ -358,6 +283,7 @@ function displayImageResult(result: GestureRecognizerResult) {
 }
 
 function displayVideoResult(result: GestureRecognizerResult) {
+  const video = document.getElementById('webcam') as HTMLVideoElement;
   canvasElement.width = video.videoWidth;
   canvasElement.height = video.videoHeight;
   canvasCtx.save();
@@ -376,115 +302,23 @@ function displayVideoResult(result: GestureRecognizerResult) {
 }
 
 function displayGestureText(result: GestureRecognizerResult) {
-  const outputDiv = document.getElementById('gesture-output');
-  if (!outputDiv) return;
+  if (!classificationResultUI) return;
 
   if (result.gestures && result.gestures.length > 0) {
-    let html = '';
+    const items: ClassificationItem[] = [];
     result.gestures.forEach((gestures, index) => {
       const handedness = result.handedness && result.handedness[index] ? result.handedness[index][0].displayName : `Hand ${index + 1}`;
       const topGesture = gestures[0];
       if (topGesture) {
-        html += `<div class="gesture-item">
-                           <strong>${handedness}:</strong> ${topGesture.categoryName} (${(topGesture.score * 100).toFixed(1)}%)
-                         </div>`;
+        items.push({
+          label: `${handedness}: ${topGesture.categoryName}`,
+          score: topGesture.score
+        });
       }
     });
-    outputDiv.innerHTML = html;
+    classificationResultUI.updateResults(items);
   } else {
-    outputDiv.innerHTML = '<p>No gestures detected.</p>';
-  }
-}
-
-async function enableCam() {
-  if (!worker || video.srcObject) return;
-
-  enableWebcamButton.innerText = 'Starting...';
-  enableWebcamButton.disabled = true;
-  const constraints = { video: true };
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    document.getElementById('webcam-placeholder')?.classList.add('hidden');
-
-    const playAndPredict = () => {
-      video.play().catch(console.error);
-      predictWebcam();
-    };
-
-    if (video.readyState >= 2) {
-      playAndPredict();
-    } else {
-      video.addEventListener('loadeddata', playAndPredict, { once: true });
-    }
-
-    runningMode = 'VIDEO';
-    worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
-    updateStatus('Webcam running...');
-    enableWebcamButton.innerText = 'Disable Webcam';
-    enableWebcamButton.disabled = false;
-  } catch (err) {
-    console.error(err);
-    updateStatus('Camera error!');
-    enableWebcamButton.innerText = 'Enable Webcam';
-    enableWebcamButton.disabled = false;
-  }
-}
-
-function toggleCam() {
-  if (video.srcObject) stopCam();
-  else enableCam();
-}
-
-function stopCam() {
-  if (video.srcObject) {
-    const stream = video.srcObject as MediaStream;
-    stream.getTracks().forEach(t => t.stop());
-    video.srcObject = null;
-    document.getElementById('webcam-placeholder')?.classList.remove('hidden');
-    enableWebcamButton.innerText = 'Enable Webcam';
-    cancelAnimationFrame(animationFrameId);
-  }
-}
-
-async function predictWebcam() {
-  if (runningMode === 'IMAGE') runningMode = 'VIDEO';
-  if (!isWorkerReady || !worker) {
-    animationFrameId = window.requestAnimationFrame(predictWebcam);
-    return;
-  }
-
-  if (video.currentTime !== lastVideoTimeSeconds) {
-    lastVideoTimeSeconds = video.currentTime;
-    try {
-      let bitmap: ImageBitmap;
-      if (navigator.webdriver) {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth || 640;
-        tempCanvas.height = video.videoHeight || 480;
-        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
-        ctx?.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        bitmap = await window.createImageBitmap(tempCanvas);
-      } else {
-        bitmap = await window.createImageBitmap(video);
-      }
-
-      const now = performance.now();
-      const timestampMs = now > lastTimestampMs ? now : lastTimestampMs + 1;
-      lastTimestampMs = timestampMs;
-
-      worker.postMessage({
-        type: 'DETECT_VIDEO',
-        bitmap: bitmap,
-        timestampMs: timestampMs
-      }, [bitmap]);
-    } catch (e) {
-      console.error("Failed to create ImageBitmap", e);
-      animationFrameId = window.requestAnimationFrame(predictWebcam);
-    }
-  } else {
-    animationFrameId = window.requestAnimationFrame(predictWebcam);
+    classificationResultUI.clear();
   }
 }
 
@@ -499,13 +333,11 @@ function updateInferenceTime(time: number) {
 }
 
 export function cleanupGestureRecognizer() {
-  if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  stopCam();
+  if (mediaManager) mediaManager.cleanup();
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
     worker.terminate();
     worker = undefined;
   }
-  isWorkerReady = false;
   if (canvasCtx && canvasElement) canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 }

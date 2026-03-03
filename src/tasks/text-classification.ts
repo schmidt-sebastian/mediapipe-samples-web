@@ -2,6 +2,9 @@
 import template from '../templates/text-classification.html?raw';
 
 import { ModelSelector } from '../components/model-selector';
+import { ClassificationResult, ClassificationItem } from '../components/classification-result';
+
+let classificationResultUI: ClassificationResult;
 let worker: Worker | undefined;
 let isWorkerReady = false;
 
@@ -26,6 +29,8 @@ export async function setupTextClassification(container: HTMLElement) {
   const delegateSelect = document.getElementById('delegate-select') as HTMLSelectElement;
   const maxResultsInput = document.getElementById('max-results') as HTMLInputElement;
   const maxResultsValue = document.getElementById('max-results-value');
+
+  classificationResultUI = new ClassificationResult('classification-results');
 
   // Event Listeners
   classifyBtn.addEventListener('click', () => {
@@ -231,32 +236,19 @@ function classifyText(text: string) {
 }
 
 function displayResults(result: any) {
-  const container = document.getElementById('classification-results');
-  if (!container || !result.classifications || result.classifications.length === 0) return;
+  if (!result || !result.classifications || result.classifications.length === 0 || !classificationResultUI) return;
 
-  container.innerHTML = '';
   const categories = result.classifications[0].categories;
 
   // Sort by score desc
   categories.sort((a: any, b: any) => b.score - a.score);
 
-  categories.forEach((category: any) => {
-    const item = document.createElement('div');
-    item.className = 'classification-item';
+  const items: ClassificationItem[] = categories.map((c: any) => ({
+    label: c.categoryName,
+    score: c.score
+  }));
 
-    const scorePct = Math.round(category.score * 100);
-
-    item.innerHTML = `
-      <div class="class-name">${category.categoryName}</div>
-      <div class="class-bar-container">
-        <div class="class-bar" style="width: ${scorePct}%"></div>
-      </div>
-      <div class="class-score">${scorePct}%</div>
-    `;
-    container.appendChild(item);
-  });
-
-
+  classificationResultUI.updateResults(items);
 }
 
 export function cleanupTextClassification() {

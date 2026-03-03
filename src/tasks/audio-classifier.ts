@@ -4,6 +4,9 @@ import { AudioClassifierResult } from '@mediapipe/tasks-audio';
 import template from '../templates/audio-classifier.html?raw';
 import { ViewToggle } from '../components/view-toggle';
 import { ModelSelector } from '../components/model-selector';
+import { ClassificationResult, ClassificationItem } from '../components/classification-result';
+
+let classificationResultUI: ClassificationResult;
 
 // @ts-ignore
 import AudioClassifierWorker from '../workers/audio-classifier.worker.ts?worker';
@@ -57,6 +60,8 @@ export async function setupAudioClassifier(container: HTMLElement) {
 
   // Setup UI
   setupUI();
+
+  classificationResultUI = new ClassificationResult('classification-results');
 
   // Initialize classifier
   await initializeClassifier();
@@ -370,9 +375,8 @@ function stopRecording() {
 }
 
 function clearClassificationResult() {
-  const container = document.getElementById('classification-results');
-  if (container) {
-    container.innerHTML = '';
+  if (classificationResultUI) {
+    classificationResultUI.clear();
   }
   const resultsContainer = document.querySelector('.audio-viewport .results-container') as HTMLElement;
   if (resultsContainer) {
@@ -517,14 +521,11 @@ function visualizeWaveform(newData: Float32Array) {
 }
 
 function displayClassificationResults(results: AudioClassifierResult[]) {
-  if (!results || results.length === 0) return;
+  if (!results || results.length === 0 || !classificationResultUI) return;
 
   const classifications = results[0].classifications[0].categories;
   // Sort by score
   classifications.sort((a, b) => b.score - a.score);
-
-  const container = document.getElementById('classification-results');
-  if (!container) return;
 
   const resultsContainer = document.querySelector('.audio-viewport .results-container') as HTMLElement;
   if (resultsContainer) {
@@ -532,85 +533,13 @@ function displayClassificationResults(results: AudioClassifierResult[]) {
     resultsContainer.style.display = 'block';
   }
 
-  container.innerHTML = '';
-
   const topResults = classifications.slice(0, maxResults);
+  const items: ClassificationItem[] = topResults.map(c => ({
+    label: c.categoryName,
+    score: c.score
+  }));
 
-  // Colors from reference (Blue, Orange, etc.)
-  const barColors = ['#4285f4', '#fb8c00', '#4285f4', '#fb8c00', '#4285f4'];
-
-  topResults.forEach((c, index) => {
-    const row = document.createElement('div');
-    row.className = 'result-row';
-    row.style.display = 'flex';
-    row.style.alignItems = 'center';
-    row.style.marginBottom = '8px';
-    row.style.fontFamily = "'Google Sans', sans-serif";
-
-    const label = document.createElement('span');
-    label.className = 'result-label';
-    label.innerText = c.categoryName;
-    label.style.width = '120px'; // Fixed width
-    label.style.color = '#5f6368';
-    label.style.fontWeight = '500';
-    label.style.overflow = 'hidden';
-    label.style.textOverflow = 'ellipsis';
-    label.style.whiteSpace = 'nowrap';
-    label.style.fontSize = '0.9rem';
-
-    const barContainer = document.createElement('div');
-    barContainer.className = 'bar-container';
-    barContainer.style.flex = '1';
-    barContainer.style.background = '#e8eaed'; // Light grey track
-    barContainer.style.height = '24px'; // Thicker bars
-    barContainer.style.borderRadius = '4px'; // Slightly rounded
-    barContainer.style.margin = '0 12px';
-    barContainer.style.overflow = 'hidden';
-    barContainer.style.position = 'relative';
-
-    const pct = Math.round(c.score * 100);
-    const color = barColors[index % barColors.length];
-
-    const bar = document.createElement('div');
-    bar.style.width = `${pct}%`;
-    bar.style.height = '100%';
-    bar.style.backgroundColor = color;
-    bar.style.borderRadius = '4px'; // Rounded
-    bar.style.transition = 'width 0.1s linear';
-    bar.style.display = 'flex';
-    bar.style.alignItems = 'center';
-    bar.style.justifyContent = 'flex-end';
-    bar.style.paddingRight = '8px';
-    bar.style.boxSizing = 'border-box';
-
-    // Label inside bar if enough space
-    const scoreLabel = document.createElement('span');
-    scoreLabel.innerText = `${pct}%`;
-    scoreLabel.style.color = 'white';
-    scoreLabel.style.fontSize = '0.8rem';
-    scoreLabel.style.fontWeight = 'bold';
-
-    // If bar is too small, maybe show outside? For now reference shows inside
-    if (pct > 10) {
-      bar.appendChild(scoreLabel);
-    }
-
-    barContainer.appendChild(bar);
-
-    // If bar is very small, we might want to put text outside, but reference shows 6% inside.
-    if (pct <= 10) {
-      // Just force it inside or let it clip?
-      // Reference 6% is visible inside. 
-      // We'll append it anyway.
-      if (!bar.contains(scoreLabel)) bar.appendChild(scoreLabel);
-    }
-
-    row.appendChild(label);
-    row.appendChild(barContainer);
-    // row.appendChild(score); // Removing external score
-
-    container.appendChild(row);
-  });
+  classificationResultUI.updateResults(items);
 }
 
 function updateStatus(msg: string) {
