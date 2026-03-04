@@ -68,8 +68,10 @@
             <input type="file" id="image-upload" accept="image/*">
             </div>
             <div id="image-preview-container" class="preview-container">
-              <img id="test-image" src="hand_model.png" crossorigin="anonymous" />
-              <canvas id="image-canvas"></canvas>
+              <div class="canvas-wrapper">
+                <img id="test-image" src="thumbs-up.png" crossorigin="anonymous" />
+                <canvas id="image-canvas"></canvas>
+              </div>
             </div>
             </div>
       </div>
@@ -77,20 +79,18 @@
       <div id="view-webcam" class="view-content">
         <div class="cam-container">
           <div class="video-wrapper">
-            
-    <div class="webcam-placeholder" id="webcam-placeholder">
-        <span class="material-icons">videocam_off</span>
-        <p>Webcam Disabled</p>
-    </div>
-    <video id="webcam" autoplay playsinline></video>
-            <canvas id="output_canvas"></canvas>
+            <div class="webcam-placeholder" id="webcam-placeholder">
+              <span class="material-icons">videocam_off</span>
+              <p>Webcam Disabled</p>
             </div>
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="output_canvas"></canvas>
+          </div>
           </div>
       </div>
-      <div id="classification-results" class="results-container classification-results"
-        style="padding: 0 20px 20px 20px; min-height: 120px;">
-      </div>
-      <div id="webcam-controls-container" style="display: none; justify-content: center; width: 100%; margin-bottom: 20px;">
+      <div id="classification-results" class="classification-results" style="padding: 0 20px; margin-bottom: 20px;"></div>
+      <div id="webcam-controls-container"
+        style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
         <button id="webcamButton" class="action-button">Enable Webcam</button>
       </div>
     </div>

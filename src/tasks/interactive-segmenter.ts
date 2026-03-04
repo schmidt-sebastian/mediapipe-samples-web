@@ -282,7 +282,7 @@ function setupUI() {
   modelSelector = new ModelSelector(
     'model-selector-container',
     [
-      { label: 'Magic Touch (Default)', value: 'magic_touch', isDefault: true }
+      { label: 'Magic Touch', value: 'magic_touch', isDefault: true }
     ],
     async (selection) => {
       if (selection.type === 'standard') {

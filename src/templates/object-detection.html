@@ -56,9 +56,6 @@
             <!-- Webcam View -->
             <div id="view-webcam" class="view-content">
                 <div class="cam-container">
-                    <button id="webcamButton" class="action-button">
-                        <span class="material-icons">videocam</span> Enable Webcam
-                    </button>
                     <div class="video-wrapper">
                         
     <div class="webcam-placeholder" id="webcam-placeholder">
@@ -69,6 +66,13 @@
                         <canvas id="output_canvas"></canvas>
                     </div>
                 </div>
+            </div>
+
+            <div id="webcam-controls-container"
+                style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
+                <button id="webcamButton" class="action-button">
+                    <span class="material-icons">videocam</span> Enable Webcam
+                </button>
             </div>
 
             <!-- Image View -->

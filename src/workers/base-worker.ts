@@ -24,7 +24,7 @@ export abstract class BaseWorker<T> {
         this.basePath = baseUrl || '/';
         this.currentOptions = { modelAssetPath, delegate, ...rest };
 
-        await this.initializeBase();
+        await this.initializeBase(event.data);
 
         const payload = this.getInitPayload();
         self.postMessage({ type: 'INIT_DONE', ...payload });
@@ -52,7 +52,7 @@ export abstract class BaseWorker<T> {
     }
   }
 
-  private async initializeBase() {
+  private async initializeBase(data: any) {
     if (this.isInitializing) return;
     this.isInitializing = true;
 
@@ -61,7 +61,7 @@ export abstract class BaseWorker<T> {
         (this.taskInstance as any).close?.();
         this.taskInstance = undefined;
       }
-      await this.initializeTask();
+      await this.initializeTask(data);
     } finally {
       this.isInitializing = false;
     }
@@ -136,8 +136,8 @@ export abstract class BaseWorker<T> {
     }
   }
 
-  protected abstract initializeTask(): Promise<void>;
-  protected abstract updateOptions(): Promise<void>;
+  protected abstract initializeTask(data?: any): Promise<void>;
+  protected abstract updateOptions(data?: any): Promise<void>;
   protected abstract handleCustomMessage(data: any): Promise<void>;
 
   protected getInitPayload(): any {

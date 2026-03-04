@@ -164,9 +164,18 @@ export abstract class BaseTask {
 
     const switchView = (mode: 'VIDEO' | 'IMAGE') => {
       localStorage.setItem('mediapipe-running-mode', mode);
+      const webcamControls = document.getElementById('webcam-controls-container');
+      const classificationResults = document.getElementById('classification-results');
+
+      // Clear out old results so they don't linger across mode switches
+      if (classificationResults) {
+        classificationResults.innerHTML = '';
+      }
+
       if (mode === 'VIDEO') {
         viewWebcam.classList.add('active');
         viewImage.classList.remove('active');
+        if (webcamControls) webcamControls.style.display = 'flex';
         this.runningMode = 'VIDEO';
         this.worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
 
@@ -177,9 +186,10 @@ export abstract class BaseTask {
       } else {
         viewWebcam.classList.remove('active');
         viewImage.classList.add('active');
+        if (webcamControls) webcamControls.style.display = 'none';
         this.runningMode = 'IMAGE';
         this.worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'IMAGE' });
-        this.stopCam(true);
+        this.stopCam(false);
 
         if (this.isWorkerReady) {
           const testImage = document.getElementById('test-image') as HTMLImageElement;
@@ -254,7 +264,7 @@ export abstract class BaseTask {
     this.modelSelector = new ModelSelector(
       'model-selector-container',
       [
-        { label: `${this.options.defaultModelName} (Default)`, value: this.options.defaultModelName, isDefault: true }
+        { label: this.options.defaultModelName, value: this.options.defaultModelName, isDefault: true }
       ],
       async (selection) => {
         if (selection.type === 'standard') {

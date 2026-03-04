@@ -209,7 +209,7 @@ function setupUI() {
   modelSelector = new ModelSelector(
     'model-selector-container',
     [
-      { label: 'Holistic Landmarker (Default)', value: 'holistic_landmarker_lite', isDefault: true }
+      { label: 'Holistic Landmarker', value: 'holistic_landmarker_lite', isDefault: true }
     ],
     async (selection) => {
       if (selection.type === 'standard') {

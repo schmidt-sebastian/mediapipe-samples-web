@@ -1,102 +1,49 @@
-import { loadModel } from '../utils/model-loader';
-import {
-  LanguageDetector,
-  FilesetResolver
-} from '@mediapipe/tasks-text';
+import { LanguageDetector, FilesetResolver } from '@mediapipe/tasks-text';
+import { BaseWorker } from './base-worker';
 
-const basePath = '/mediapipe-samples-web/';
-
-import { loadWasmModule } from '../utils/wasm-loader';
-
-let languageDetector: LanguageDetector | undefined;
-let isInitializing = false;
-
-// Define message types
-type WorkerMessage =
-  | { type: 'INIT'; modelAssetPath: string; delegate?: 'CPU' | 'GPU'; maxResults?: number; scoreThreshold?: number; baseUrl?: string }
-  | { type: 'DETECT'; text: string; timestampMs: number }
-  | { type: 'CLEANUP' };
-
-
-// ... (rest of imports)
-
-// (Deleted local loadModel function)
-
-async function initDetector(data: any) {
-  if (isInitializing) return;
-  isInitializing = true;
-
-  try {
-    if (languageDetector) {
-      languageDetector.close();
-      languageDetector = undefined;
-    }
-
-    const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
+class LanguageDetectorWorker extends BaseWorker<LanguageDetector> {
+  protected async initializeTask(data: any): Promise<void> {
+    const wasmPath = new URL(`${data.baseUrl || import.meta.env.BASE_URL}wasm`, self.location.origin).href;
     const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
 
-    // Inject the loader using our shared utility
-    const factory = await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
+    const factory = await this.loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
     // @ts-ignore
     self.createMediapipeTasksTextModule = factory;
 
     const text = await FilesetResolver.forTextTasks(wasmPath);
 
-    const modelBuffer = await loadModel(data.modelAssetPath, (loaded, total) => {
-      self.postMessage({
-        type: 'LOAD_PROGRESS',
-        loaded,
-        total
-      });
-    });
+    const modelBuffer = await this.loadModelAsset();
 
-    languageDetector = await LanguageDetector.createFromOptions(text, {
+    this.taskInstance = await LanguageDetector.createFromOptions(text, {
       baseOptions: {
         modelAssetBuffer: new Uint8Array(modelBuffer),
-        delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
+        delegate: this.currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
       },
-      maxResults: data.maxResults,
-      scoreThreshold: data.scoreThreshold
+      maxResults: this.currentOptions.maxResults,
+      scoreThreshold: this.currentOptions.scoreThreshold
     });
+  }
 
-    self.postMessage({ type: 'INIT_DONE' });
+  protected async updateOptions(/* data: any */): Promise<void> {
+  // Language detector doesn't seem to have a dynamic setOptions
+  }
 
-  } catch (error: any) {
-    console.error("Language Detector Init Error:", error);
-    self.postMessage({ type: 'ERROR', error: error.message });
-  } finally {
-    isInitializing = false;
+  protected async handleCustomMessage(event: any): Promise<void> {
+    const { type, ...data } = event;
+
+    if (type === 'DETECT' && this.taskInstance && 'text' in data) {
+      try {
+        const result = this.taskInstance.detect(data.text);
+        self.postMessage({
+          type: 'DETECT_RESULT',
+          result,
+          timestampMs: data.timestampMs
+        });
+      } catch (error: any) {
+        self.postMessage({ type: 'ERROR', error: error.message || String(error) });
+      }
+    }
   }
 }
 
-self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-  const { type } = event.data;
-
-  switch (type) {
-    case 'INIT':
-      await initDetector(event.data);
-      break;
-    case 'DETECT':
-      if (languageDetector && 'text' in event.data) {
-        try {
-          const result = languageDetector.detect(event.data.text);
-          self.postMessage({
-            type: 'DETECT_RESULT',
-            result,
-            timestampMs: event.data.timestampMs
-          });
-        } catch (error) {
-          self.postMessage({ type: 'ERROR', error: error instanceof Error ? error.message : String(error) });
-        }
-      }
-      break;
-    case 'CLEANUP':
-      if (languageDetector) {
-        languageDetector.close();
-        languageDetector = undefined;
-      }
-      break;
-  }
-};
-
-
+new LanguageDetectorWorker();

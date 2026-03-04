@@ -67,7 +67,7 @@ class GestureRecognizerTask extends BaseTask {
 
     if (this.modelSelector) {
       this.modelSelector.updateOptions([
-        { label: 'Gesture Recognizer (Default)', value: 'gesture_recognizer', isDefault: true }
+        { label: 'Gesture Recognizer', value: 'gesture_recognizer', isDefault: true }
       ]);
     }
   }
@@ -152,9 +152,17 @@ class GestureRecognizerTask extends BaseTask {
           });
         }
       });
-      this.classificationResultUI.updateResults(items);
+
+      // If we filtered out all the 'None' gestures and have a real valid gesture, update.
+      if (items.length > 0) {
+        this.classificationResultUI.updateResults(items);
+      } else {
+        // If the only gesture found was 'None', explicitly print 0% 'No results'.
+        this.classificationResultUI.updateResults([]);
+      }
     } else {
-      this.classificationResultUI.clear();
+      // If the Mediapipe graph found no hands at all, explicitly print 0% 'No results'.
+      this.classificationResultUI.updateResults([]);
     }
   }
 }

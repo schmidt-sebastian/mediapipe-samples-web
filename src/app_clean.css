@@ -459,7 +459,7 @@ select:focus {
 }
 
 .view-content.active {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
     min-height: 0;
     min-width: 0;
   display: flex;
@@ -492,8 +492,7 @@ select:focus {
 .video-wrapper {
   position: relative;
   width: 100%;
-  height: 100%;
-    flex: 1 1 auto;
+  height: auto;
     min-height: 0;
     min-width: 0;
   max-width: 640px;
@@ -566,11 +565,8 @@ video {
 /* Specific override for webcam view if needed, but for audio we want it relative */
 .cam-container>.action-button,
 .cam-container .webcam-controls {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  margin: 0;
+  position: relative;
+    margin: 20px auto 0 auto;
   z-index: 10;
 }
 
@@ -633,11 +629,10 @@ video {
 .preview-container .canvas-wrapper img {
   display: block;
   max-width: 100%;
-  max-height: 500px;
+  max-height: 480px;
   width: auto;
   height: auto;
-  object-fit: fill;
-  /* Reset object-fit to ensure physical element matches image pixels exactly */
+  border-radius: var(--radius-md);
 }
 
 .preview-container .canvas-wrapper canvas {
@@ -647,42 +642,33 @@ video {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  object-fit: fill;
-  /* Let clicks pass through if needed, though tasks might bind to it */
+  border-radius: var(--radius-md);
 }
+
 .preview-container {
   position: relative;
   width: 100%;
-  min-height: 200px;
-    /* Reduced from 400px so it fits inside dropzone or expands it */
-  background: var(--surface);
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
+  display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
   margin-bottom: 1rem;
 }
 
 .upload-dropzone {
+  position: relative;
   width: 100%;
-  max-width: 500px;
-  min-height: 300px;
-    /* Changed from height to min-height */
-    height: auto;
-  border: 2px dashed #ccc;
+  max-width: 640px;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #f8f9fa;
-  margin: 0 auto;
-  padding: 20px;
-    /* Added padding to ensure content doesn't hit border */
+  background: transparent;
+    margin: 0 auto 1rem auto;
 }
 
-.upload-dropzone:hover {
+.upload-dropzone:hover .dropzone-content {
   border-color: var(--primary);
   background: #e3f2fd;
 }
@@ -693,7 +679,14 @@ video {
   align-items: center;
   gap: 16px;
   text-align: center;
-  padding: 20px;
+  padding: 40px 20px;
+    width: 100%;
+    border: 2px dashed #ccc;
+    border-radius: var(--radius-md);
+    background: #f8f9fa;
+    box-sizing: border-box;
+    transition: all 0.2s;
+    cursor: pointer;
 }
 
 .large-icon {
@@ -709,20 +702,6 @@ video {
   width: 100%;
   outline: none;
   border-radius: 30px;
-  /* Rounded player */
-}
-
-
-
-.upload-dropzone input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  z-index: 10;
 }
 
 /* Legend Container: Fixes bunching labels */
@@ -784,12 +763,11 @@ video {
   display: none;
 }
 
-/* Re-upload button should match action-button placement */
 .re-upload {
-  /* It inherits .action-button absolute positioning now */
-    /* Remove overrides that made it relative */
+  position: relative;
+    margin-top: 15px;
     display: flex;
-    /* Ensure it's displayed when active */
+  z-index: 20;
 }
 
 .re-upload:hover {

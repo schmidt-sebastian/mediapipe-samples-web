@@ -16,8 +16,7 @@ export class ClassificationResult {
     this.container.innerHTML = '';
     
     if (results.length === 0) {
-      this.container.innerHTML = '<div class="no-results">No categories found matching criteria</div>';
-      return;
+      results = [{ label: 'No results', score: 0 }];
     }
 
     results.forEach(result => {

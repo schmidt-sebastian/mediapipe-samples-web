@@ -100,7 +100,17 @@ export class MediaManager {
       dropzoneContent.style.display = 'none';
     }
 
-    if (dropzone) dropzone.addEventListener('click', () => imageUpload?.click());
+    if (dropzoneContent) dropzoneContent.addEventListener('click', () => imageUpload?.click());
+
+    setTimeout(() => {
+      const reUploadBtn = document.getElementById('re-upload-btn');
+      if (reUploadBtn) {
+        reUploadBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          imageUpload?.click();
+        });
+      }
+    }, 0);
 
     imageUpload?.addEventListener('change', (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
