@@ -3,65 +3,60 @@ import {
   FilesetResolver,
   GestureRecognizerResult
 } from '@mediapipe/tasks-vision';
-import { loadModel } from '../utils/model-loader';
-import { loadWasmModule } from '../utils/wasm-loader';
+
+import { BaseWorker } from './base-worker';
 
 // MediaPipe Emscripten fallback
 // @ts-ignore
 self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
-let gestureRecognizer: GestureRecognizer | undefined = undefined;
-let isInitializing = false;
-let currentOptions: any = {};
-let basePath = '/';
+class GestureRecognizerWorker extends BaseWorker<GestureRecognizer> {
+  protected async initializeTask(): Promise<void> {
+    const wasmLoaderUrl = `${this.getWasmPath()}/vision_wasm_internal.js`;
+    await this.loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
 
-let isProcessing = false;
+    const vision = await FilesetResolver.forVisionTasks(this.getWasmPath());
+    const modelBuffer = await this.loadModelAsset();
 
-self.onmessage = async (event) => {
-  const { type } = event.data;
-
-  // Simple queue/lock
-  while (isProcessing) {
-    await new Promise(resolve => setTimeout(() => resolve(true), 10));
+    this.taskInstance = await GestureRecognizer.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate: this.currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
+      },
+      minHandDetectionConfidence: this.currentOptions.minHandDetectionConfidence,
+      minHandPresenceConfidence: this.currentOptions.minHandPresenceConfidence,
+      minTrackingConfidence: this.currentOptions.minTrackingConfidence,
+      numHands: this.currentOptions.numHands,
+      runningMode: this.currentOptions.runningMode,
+    });
   }
-  isProcessing = true;
 
-  try {
-    if (type === 'INIT') {
-      const { modelAssetPath, delegate, minHandDetectionConfidence, minHandPresenceConfidence, minTrackingConfidence, numHands, runningMode, baseUrl } = event.data;
-      basePath = baseUrl || '/';
-      currentOptions = { modelAssetPath, delegate, minHandDetectionConfidence, minHandPresenceConfidence, minTrackingConfidence, numHands, runningMode };
-      await initDetector();
-    } else if (type === 'SET_OPTIONS') {
-      if ('minHandDetectionConfidence' in event.data) currentOptions.minHandDetectionConfidence = event.data.minHandDetectionConfidence;
-      if ('minHandPresenceConfidence' in event.data) currentOptions.minHandPresenceConfidence = event.data.minHandPresenceConfidence;
-      if ('minTrackingConfidence' in event.data) currentOptions.minTrackingConfidence = event.data.minTrackingConfidence;
-      if ('numHands' in event.data) currentOptions.numHands = event.data.numHands;
-      if ('runningMode' in event.data) currentOptions.runningMode = event.data.runningMode;
+  protected async updateOptions(): Promise<void> {
+    if (this.taskInstance) {
+      await this.taskInstance.setOptions({
+        minHandDetectionConfidence: this.currentOptions.minHandDetectionConfidence,
+        minHandPresenceConfidence: this.currentOptions.minHandPresenceConfidence,
+        minTrackingConfidence: this.currentOptions.minTrackingConfidence,
+        numHands: this.currentOptions.numHands,
+        runningMode: this.currentOptions.runningMode
+      });
+    }
+  }
 
-      if (gestureRecognizer) {
-        await gestureRecognizer.setOptions({
-          minHandDetectionConfidence: currentOptions.minHandDetectionConfidence,
-          minHandPresenceConfidence: currentOptions.minHandPresenceConfidence,
-          minTrackingConfidence: currentOptions.minTrackingConfidence,
-          numHands: currentOptions.numHands,
-          runningMode: currentOptions.runningMode
-        });
-        self.postMessage({ type: 'OPTIONS_UPDATED' });
-      }
-    } else if (type === 'DETECT_IMAGE' || type === 'DETECT_VIDEO') {
-      const { bitmap, timestampMs } = event.data;
-      if (!gestureRecognizer) {
-        // console.warn('GestureRecognizer not initialized yet.');
+  protected async handleCustomMessage(data: any): Promise<void> {
+    if (data.type === 'DETECT_IMAGE' || data.type === 'DETECT_VIDEO') {
+      const { bitmap, timestampMs } = data;
+      const requiredMode = data.type === 'DETECT_IMAGE' ? 'IMAGE' : 'VIDEO';
+
+      if (!this.taskInstance) {
         bitmap.close();
         self.postMessage({ type: 'DETECT_ERROR', error: 'Not initialized' });
         return;
       }
 
-      const requiredMode = type === 'DETECT_IMAGE' ? 'IMAGE' : 'VIDEO';
-      if (currentOptions.runningMode !== requiredMode) {
-        currentOptions.runningMode = requiredMode;
-        await gestureRecognizer.setOptions({ runningMode: requiredMode });
+      if (this.currentOptions.runningMode !== requiredMode) {
+        this.currentOptions.runningMode = requiredMode;
+        await this.updateOptions();
       }
 
       const startTimeMs = performance.now();
@@ -69,9 +64,9 @@ self.onmessage = async (event) => {
 
       try {
         if (requiredMode === 'VIDEO') {
-          result = gestureRecognizer.recognizeForVideo(bitmap, timestampMs);
+          result = this.taskInstance.recognizeForVideo(bitmap, timestampMs);
         } else {
-          result = gestureRecognizer.recognize(bitmap);
+          result = this.taskInstance.recognize(bitmap);
         }
       } catch (e: any) {
         console.error("Worker recognition error:", e);
@@ -83,101 +78,14 @@ self.onmessage = async (event) => {
       const inferenceTime = performance.now() - startTimeMs;
       bitmap.close();
 
-      // @ts-ignore
       (self as any).postMessage({
         type: 'DETECT_RESULT',
         mode: requiredMode,
         result: result,
         inferenceTime: inferenceTime
       });
-    } else if (type === 'CLEANUP') {
-      if (gestureRecognizer) {
-        gestureRecognizer.close();
-        gestureRecognizer = undefined;
-      }
-      self.postMessage({ type: 'CLEANUP_DONE' });
     }
-  } catch (error: any) {
-    console.error("Gesture Recognizer Worker Error:", error);
-    self.postMessage({ type: 'ERROR', error: error?.message || String(error) });
-  } finally {
-    isProcessing = false;
-  }
-};
-
-async function initDetector() {
-  console.log('[Worker] initDetector started');
-  if (isInitializing) return;
-  isInitializing = true;
-
-  try {
-    if (gestureRecognizer) {
-      gestureRecognizer.close();
-      gestureRecognizer = undefined;
-    }
-
-    const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-    console.log('[Worker] WASM path:', wasmPath);
-    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-
-    await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
-    console.log('[Worker] WASM loaded');
-
-    const vision = await FilesetResolver.forVisionTasks(wasmPath);
-    console.log('[Worker] FilesetResolver initialized');
-
-    const modelBuffer = await loadModel(currentOptions.modelAssetPath, (loaded, total) => {
-      self.postMessage({
-        type: 'LOAD_PROGRESS',
-        loaded,
-        total
-      });
-    });
-    console.log('[Worker] Model loaded, size:', modelBuffer.byteLength);
-
-    if (currentOptions.delegate === 'GPU') {
-      console.warn('[Worker] GPU Delegate requested.');
-    }
-
-    try {
-      gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetBuffer: new Uint8Array(modelBuffer),
-          delegate: currentOptions.delegate,
-        },
-        minHandDetectionConfidence: currentOptions.minHandDetectionConfidence,
-        minHandPresenceConfidence: currentOptions.minHandPresenceConfidence,
-        minTrackingConfidence: currentOptions.minTrackingConfidence,
-        numHands: currentOptions.numHands,
-        runningMode: currentOptions.runningMode,
-      });
-      console.log('[Worker] GestureRecognizer created successfully');
-    } catch (finalError) {
-      console.error('GestureRecognizer initialization failed:', finalError);
-      if (currentOptions.delegate === 'GPU') {
-        console.warn('GPU init failed, falling back to CPU', finalError);
-        self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-        gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetBuffer: new Uint8Array(modelBuffer),
-            delegate: 'CPU',
-          },
-          minHandDetectionConfidence: currentOptions.minHandDetectionConfidence,
-          minHandPresenceConfidence: currentOptions.minHandPresenceConfidence,
-          minTrackingConfidence: currentOptions.minTrackingConfidence,
-          numHands: currentOptions.numHands,
-          runningMode: currentOptions.runningMode,
-        });
-      } else {
-        throw finalError;
-      }
-    }
-    self.postMessage({ type: 'INIT_DONE' });
-
-  } catch (error: any) {
-    console.error("Gesture Recognizer Worker Init Error:", error);
-    throw error;
-  } finally {
-    isInitializing = false;
   }
 }
+
+new GestureRecognizerWorker();

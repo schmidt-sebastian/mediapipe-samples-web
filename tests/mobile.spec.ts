@@ -97,7 +97,7 @@ test.describe('Mobile Layout & Navigation', () => {
     console.log('Button box:', btnBox);
 
     await expect(btn).toHaveCSS('position', 'absolute');
-    await expect(btn).toHaveCSS('bottom', '30px');
+    await expect(btn).toHaveCSS('bottom', '20px');
 
     // Check horizontal centering via CSS
     const transform = await btn.evaluate(el => getComputedStyle(el).transform);

@@ -39,6 +39,21 @@ export class ModelSelector {
     this.render();
   }
 
+  public updateOptions(newOptions: ModelOption[]) {
+    this.options = newOptions;
+
+    if (this.modelSelect) {
+      this.modelSelect.innerHTML = '';
+      this.options.forEach((opt) => {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (opt.isDefault) o.selected = true;
+        this.modelSelect.appendChild(o);
+      });
+    }
+  }
+
   private render() {
     // 1. Structural CSS / HTML
     this.container.innerHTML = `

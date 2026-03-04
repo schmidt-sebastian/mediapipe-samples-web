@@ -1,101 +1,82 @@
 import {
   ImageClassifier,
-  FilesetResolver
+  FilesetResolver,
+  ImageClassifierResult
 } from '@mediapipe/tasks-vision';
-import { loadWasmModule } from '../utils/wasm-loader';
+import { BaseWorker } from './base-worker';
 
-const basePath = import.meta.env.BASE_URL;
+class ImageClassifierWorker extends BaseWorker<ImageClassifier> {
+  protected async initializeTask(): Promise<void> {
+    const wasmLoaderUrl = `${this.getWasmPath()}/vision_wasm_internal.js`;
+    await this.loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
 
-let imageClassifier: ImageClassifier | undefined;
-let isInitializing = false;
+    const vision = await FilesetResolver.forVisionTasks(this.getWasmPath());
+    const modelBuffer = await this.loadModelAsset();
 
-self.onmessage = async (event) => {
-  const { type } = event.data;
-
-  if (type === 'INIT') {
-    await initClassifier(event.data);
-  } else if (type === 'CLASSIFY_IMAGE') {
-    await classifyImage(event.data);
-  } else if (type === 'CLASSIFY_VIDEO') {
-    await classifyVideo(event.data);
-  } else if (type === 'SET_OPTIONS') {
-    await setOptions(event.data);
-  } else if (type === 'CLEANUP') {
-    imageClassifier?.close();
-    imageClassifier = undefined;
-  }
-};
-
-async function initClassifier(data: any) {
-  if (isInitializing) return;
-  isInitializing = true;
-
-  try {
-    const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-
-    await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
-
-    const vision = await FilesetResolver.forVisionTasks(wasmPath);
-
-    imageClassifier = await ImageClassifier.createFromOptions(vision, {
+    this.taskInstance = await ImageClassifier.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: data.modelAssetPath,
-        delegate: data.delegate || 'GPU',
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate: this.currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
       },
-      runningMode: data.runningMode || 'IMAGE',
-      maxResults: data.maxResults || 5,
-      scoreThreshold: data.scoreThreshold || 0.0,
+      runningMode: this.currentOptions.runningMode || 'IMAGE',
+      maxResults: this.currentOptions.maxResults || 5,
+      scoreThreshold: this.currentOptions.scoreThreshold || 0.0,
     });
+  }
 
-    self.postMessage({ type: 'INIT_DONE' });
+  protected async updateOptions(): Promise<void> {
+    if (this.taskInstance) {
+      await this.taskInstance.setOptions({
+        runningMode: this.currentOptions.runningMode,
+        maxResults: this.currentOptions.maxResults,
+        scoreThreshold: this.currentOptions.scoreThreshold,
+      });
+    }
+  }
 
-  } catch (error: any) {
-    console.error("Image Classifier Init Error:", error);
-    self.postMessage({ type: 'ERROR', error: error.message });
-  } finally {
-    isInitializing = false;
+  protected async handleCustomMessage(data: any): Promise<void> {
+    if (data.type === 'DETECT_IMAGE' || data.type === 'DETECT_VIDEO') {
+      const { bitmap, timestampMs } = data;
+      const requiredMode = data.type === 'DETECT_IMAGE' ? 'IMAGE' : 'VIDEO';
+
+      if (!this.taskInstance) {
+        bitmap?.close();
+        self.postMessage({ type: 'ERROR', error: 'Not initialized' });
+        return;
+      }
+
+      if (this.currentOptions.runningMode !== requiredMode) {
+        this.currentOptions.runningMode = requiredMode;
+        await this.updateOptions();
+      }
+
+      const startTimeMs = performance.now();
+      let result: ImageClassifierResult;
+
+      try {
+        if (requiredMode === 'VIDEO') {
+          result = this.taskInstance.classifyForVideo(bitmap, timestampMs);
+        } else {
+          result = this.taskInstance.classify(bitmap);
+        }
+      } catch (e: any) {
+        console.error("Worker classification error:", e);
+        bitmap?.close();
+        self.postMessage({ type: 'ERROR', error: e.message || 'Classification failed' });
+        return;
+      }
+
+      const inferenceTime = performance.now() - startTimeMs;
+      bitmap?.close();
+
+      (self as any).postMessage({
+        type: 'DETECT_RESULT',
+        mode: requiredMode,
+        result: result,
+        inferenceTime: inferenceTime
+      });
+    }
   }
 }
 
-async function classifyImage(data: any) {
-  if (!imageClassifier) return;
-  try {
-    const result = imageClassifier.classify(data.bitmap);
-    self.postMessage({
-      type: 'CLASSIFY_RESULT',
-      result,
-      mode: 'IMAGE',
-      inferenceTime: performance.now() - data.timestampMs
-    });
-  } catch (error: any) {
-    self.postMessage({ type: 'ERROR', error: error.message });
-  }
-}
-
-async function classifyVideo(data: any) {
-  if (!imageClassifier) return;
-  try {
-    const startTimeMs = performance.now();
-    const result = imageClassifier.classifyForVideo(data.bitmap, data.timestampMs);
-    const inferenceTime = performance.now() - startTimeMs;
-
-    self.postMessage({
-      type: 'CLASSIFY_RESULT',
-      result,
-      mode: 'VIDEO',
-      inferenceTime
-    });
-  } catch (error: any) {
-    console.warn("Video classification error", error);
-  }
-}
-
-async function setOptions(data: any) {
-  if (!imageClassifier) return;
-  try {
-    await imageClassifier.setOptions(data);
-  } catch (error: any) {
-    console.error("Set Options Error", error);
-  }
-}
+new ImageClassifierWorker();

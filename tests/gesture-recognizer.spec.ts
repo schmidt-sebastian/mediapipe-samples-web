@@ -30,9 +30,13 @@ test.describe('Gesture Recognizer Task', () => {
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     const webcamBtn = page.locator('#webcamButton');
+
+    // Explicitly click to start since we don't auto-start from localStorage by default
+    await webcamBtn.click();
+
     await expect(webcamBtn).not.toHaveText('Initializing...', { timeout: 15000 });
 
-    // Since it auto-starts, it should eventually be "Disable Webcam"
+    // Since we clicked it, it should eventually be "Disable Webcam"
     await expect(webcamBtn).toHaveText('Disable Webcam', { timeout: 10000 });
     await expect(page.locator('#status-message')).toHaveText(/(Webcam running...)|(Done)|(Ready)/, { timeout: 15000 });
 

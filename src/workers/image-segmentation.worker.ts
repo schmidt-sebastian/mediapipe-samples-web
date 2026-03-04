@@ -1,62 +1,65 @@
-import { loadModel } from '../utils/model-loader';
 import {
   ImageSegmenter,
   FilesetResolver,
   ImageSegmenterResult
 } from '@mediapipe/tasks-vision';
 
-import { loadWasmModule } from '../utils/wasm-loader';
+import { BaseWorker } from './base-worker';
 
 // MediaPipe Emscripten fallback
 // @ts-ignore
 self.createMediapipeTasksVisionModule = self.createMediapipeTasksVisionModule || undefined;
 
-let imageSegmenter: ImageSegmenter | undefined = undefined;
-let renderCanvas: OffscreenCanvas | undefined = undefined;
-let isInitializing = false;
-let currentOptions: any = {};
-let basePath = '/';
+class ImageSegmentationWorker extends BaseWorker<ImageSegmenter> {
+  private renderCanvas?: OffscreenCanvas;
 
-let isProcessing = false;
+  protected async initializeTask(): Promise<void> {
+    const wasmLoaderUrl = `${this.getWasmPath()}/vision_wasm_internal.js`;
+    await this.loadWasmModule(wasmLoaderUrl);
 
-self.onmessage = async (event) => {
-  const { type } = event.data;
+    const vision = await FilesetResolver.forVisionTasks(this.getWasmPath());
+    const modelBuffer = await this.loadModelAsset();
 
-  // Simple queue/lock to prevent calling WASM inference while setOptions is yielding the thread
-  while (isProcessing) {
-    await new Promise(resolve => setTimeout(() => resolve(true), 10));
+    this.taskInstance = await ImageSegmenter.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetBuffer: new Uint8Array(modelBuffer),
+        delegate: this.currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
+      },
+      runningMode: this.currentOptions.runningMode,
+      outputCategoryMask: true,
+      outputConfidenceMasks: true
+    });
   }
-  isProcessing = true;
 
-  try {
-    if (type === 'INIT') {
-      const { modelAssetPath, delegate, runningMode, baseUrl } = event.data;
-      basePath = baseUrl || '/';
-      currentOptions = { modelAssetPath, delegate, runningMode };
-      await initSegmenter();
-      const labels = imageSegmenter ? imageSegmenter.getLabels() : [];
-      self.postMessage({ type: 'INIT_DONE', labels });
-    } else if (type === 'SET_OPTIONS') {
-      if ('runningMode' in event.data) currentOptions.runningMode = event.data.runningMode;
-      if (imageSegmenter) {
-        await imageSegmenter.setOptions({
-          runningMode: currentOptions.runningMode
-        });
-        self.postMessage({ type: 'OPTIONS_UPDATED' });
-      }
-    } else if (type === 'SEGMENT_IMAGE' || type === 'SEGMENT_VIDEO') {
-      const { bitmap, timestampMs, colors } = event.data;
-      if (!imageSegmenter) {
-        console.warn('ImageSegmenter not initialized yet.');
+  protected async updateOptions(): Promise<void> {
+    if (this.taskInstance) {
+      await this.taskInstance.setOptions({
+        runningMode: this.currentOptions.runningMode
+      });
+    }
+  }
+
+  protected override getInitPayload(): any {
+    return {
+      labels: this.taskInstance ? this.taskInstance.getLabels() : []
+    };
+  }
+
+  protected async handleCustomMessage(data: any): Promise<void> {
+    if (data.type === 'SEGMENT_IMAGE' || data.type === 'SEGMENT_VIDEO') {
+      const { bitmap, timestampMs, colors } = data;
+      const requiredMode = data.type === 'SEGMENT_IMAGE' ? 'IMAGE' : 'VIDEO';
+
+      if (!this.taskInstance) {
+        console.warn('ImageSegmenter not initialized.');
         bitmap.close();
         self.postMessage({ type: 'SEGMENT_ERROR', error: 'Not initialized' });
         return;
       }
 
-      const requiredMode = type === 'SEGMENT_IMAGE' ? 'IMAGE' : 'VIDEO';
-      if (currentOptions.runningMode !== requiredMode) {
-        currentOptions.runningMode = requiredMode;
-        await imageSegmenter.setOptions({ runningMode: requiredMode });
+      if (this.currentOptions.runningMode !== requiredMode) {
+        this.currentOptions.runningMode = requiredMode;
+        await this.updateOptions();
       }
 
       const startTimeMs = performance.now();
@@ -74,12 +77,11 @@ self.onmessage = async (event) => {
             width = result.categoryMask.width;
             height = result.categoryMask.height;
 
-            // Recreate offscreen canvas ensures clean state and avoids artifacts from transferToImageBitmap
-            if (!renderCanvas || renderCanvas.width !== width || renderCanvas.height !== height) {
-              renderCanvas = new OffscreenCanvas(width, height);
+            if (!this.renderCanvas || this.renderCanvas.width !== width || this.renderCanvas.height !== height) {
+              this.renderCanvas = new OffscreenCanvas(width, height);
             }
 
-            const ctx = renderCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+            const ctx = this.renderCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
             if (ctx) {
               const maskData = result.categoryMask.getAsUint8Array();
               const imageData = ctx.createImageData(width, height);
@@ -95,123 +97,43 @@ self.onmessage = async (event) => {
                 data[offset + 3] = color[3];
               }
               ctx.putImageData(imageData, 0, 0);
-
-              // Use transferToImageBitmap for 2D as it's efficient and safe
-              maskBitmap = renderCanvas.transferToImageBitmap();
-            } else {
-              console.error('Failed to get 2D context');
+              maskBitmap = this.renderCanvas.transferToImageBitmap();
             }
-
-            // Free WASM memory
             result.categoryMask.close();
+          }
+
+          if (result.confidenceMasks) {
+            result.confidenceMasks.forEach((m: any) => m.close());
           }
 
           (self as any).postMessage({
             type: 'SEGMENT_RESULT',
             mode: requiredMode,
-            maskBitmap: maskBitmap,
-            width: width,
-            height: height,
-            inferenceTime: inferenceTime
+            maskBitmap,
+            width,
+            height,
+            inferenceTime
           }, maskBitmap ? [maskBitmap] : []);
+
         } catch (e: any) {
           console.error("Worker callback error:", e);
-          (self as any).postMessage({ type: 'SEGMENT_ERROR', error: e.message || 'Worker callback error', mode: requiredMode });
+          self.postMessage({ type: 'SEGMENT_ERROR', error: e.message || 'Processing failed' });
         }
       };
 
       try {
         if (requiredMode === 'VIDEO') {
-          imageSegmenter.segmentForVideo(bitmap, timestampMs, callback);
+          this.taskInstance.segmentForVideo(bitmap, timestampMs, callback);
         } else {
-          const result = imageSegmenter.segment(bitmap);
-          callback(result);
+          this.taskInstance.segment(bitmap, callback);
         }
       } catch (e: any) {
-        console.error("Worker segment error:", e);
+        console.error("Worker segmentation error:", e);
         bitmap.close();
         self.postMessage({ type: 'SEGMENT_ERROR', error: e.message || 'Segmentation failed' });
-        return;
-      }
-    } else if (type === 'CLEANUP') {
-      if (imageSegmenter) {
-        imageSegmenter.close();
-        imageSegmenter = undefined;
-      }
-      self.postMessage({ type: 'CLEANUP_DONE' });
-    }
-  } catch (error: any) {
-    console.error("Image Segmentation Worker Error:", error);
-    self.postMessage({ type: 'ERROR', error: error?.message || String(error) });
-  } finally {
-    isProcessing = false;
-  }
-};
-
-
-
-
-
-
-
-async function initSegmenter() {
-  if (isInitializing) return;
-  isInitializing = true;
-
-  try {
-    if (imageSegmenter) {
-      imageSegmenter.close();
-      imageSegmenter = undefined;
-    }
-
-    const wasmPath = new URL(`${basePath}wasm`, self.location.origin).href;
-
-    // WORKAROUND: Vite + MediaPipe module workers fail to inject ModuleFactory via importScripts.
-    const wasmLoaderUrl = `${wasmPath}/vision_wasm_internal.js`;
-    // Inject the loader using our shared utility
-    await loadWasmModule(wasmLoaderUrl);
-
-    const vision = await FilesetResolver.forVisionTasks(wasmPath);
-
-    // Manually fetch model to report progress
-    const modelBuffer = await loadModel(currentOptions.modelAssetPath, (loaded, total) => {
-      self.postMessage({
-        type: 'LOAD_PROGRESS',
-        loaded,
-        total
-      });
-    });
-
-
-    // Override options to use buffer
-    const options = {
-      baseOptions: {
-        modelAssetBuffer: new Uint8Array(modelBuffer),
-        delegate: currentOptions.delegate,
-      },
-      outputCategoryMask: true,
-      outputConfidenceMasks: false,
-      runningMode: currentOptions.runningMode
-    };
-
-    try {
-      imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
-    } catch (error) {
-      // Fallback to CPU if GPU fails
-      console.warn('GPU init failed, falling back to CPU', error);
-      if (currentOptions.delegate === 'GPU') {
-        self.postMessage({ type: 'DELEGATE_FALLBACK', newDelegate: 'CPU' });
-        options.baseOptions.delegate = 'CPU';
-        imageSegmenter = await ImageSegmenter.createFromOptions(vision, options);
-      } else {
-        throw error;
       }
     }
-
-  } catch (error: any) {
-    console.error("Image Segmentation Worker Init Error:", error);
-    throw error;
-  } finally {
-    isInitializing = false;
   }
 }
+
+new ImageSegmentationWorker();

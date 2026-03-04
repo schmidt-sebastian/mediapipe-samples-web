@@ -68,8 +68,13 @@ function handleWorkerMessage(event: MessageEvent) {
     case 'INIT_DONE':
       document.querySelector('.viewport')?.classList.remove('loading-model');
       isWorkerReady = true;
-      enableWebcamButton.disabled = false;
-      enableWebcamButton.innerText = 'Enable Webcam';
+      if (video && video.srcObject) {
+        enableWebcamButton.innerText = 'Disable Webcam';
+        enableWebcamButton.disabled = false;
+      } else if (enableWebcamButton.innerText !== 'Starting...') {
+        enableWebcamButton.innerText = 'Enable Webcam';
+        enableWebcamButton.disabled = false;
+      }
 
       modelSelector?.hideProgress();
 
@@ -188,7 +193,10 @@ function setupUI() {
         type: 'SET_OPTIONS',
         runningMode: 'VIDEO'
       });
-      enableCam();
+      const isWebcamActive = localStorage.getItem('mediapipe-webcam-active') === 'true';
+      if (isWebcamActive) {
+        enableCam();
+      }
     } else {
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
@@ -387,6 +395,7 @@ async function enableCam() {
     }
 
     runningMode = 'VIDEO';
+    localStorage.setItem('mediapipe-webcam-active', 'true');
     worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
     updateStatus('Webcam running...');
     enableWebcamButton.innerText = 'Disable Webcam';
@@ -416,6 +425,7 @@ function stopCam() {
     document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
+    localStorage.setItem('mediapipe-webcam-active', 'false');
   }
 }
 

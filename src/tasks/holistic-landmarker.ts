@@ -75,8 +75,13 @@ function handleWorkerMessage(event: MessageEvent) {
       modelSelector?.hideProgress();
       document.querySelector('.viewport')?.classList.remove('loading-model');
       isWorkerReady = true;
-      enableWebcamButton.disabled = false;
-      enableWebcamButton.innerText = 'Enable Webcam';
+      if (video && video.srcObject) {
+        enableWebcamButton.innerText = 'Disable Webcam';
+        enableWebcamButton.disabled = false;
+      } else if (enableWebcamButton.innerText !== 'Starting...') {
+        enableWebcamButton.innerText = 'Enable Webcam';
+        enableWebcamButton.disabled = false;
+      }
       updateStatus('Ready');
 
       if (runningMode === 'VIDEO') {
@@ -164,7 +169,10 @@ function setupUI() {
       viewImage.classList.remove('active');
       runningMode = 'VIDEO';
       worker?.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
-      enableCam();
+      const isWebcamActive = localStorage.getItem('mediapipe-webcam-active') === 'true';
+      if (isWebcamActive) {
+        enableCam();
+      }
     } else {
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
@@ -354,6 +362,7 @@ async function enableCam() {
     }
 
     runningMode = 'VIDEO';
+    localStorage.setItem('mediapipe-webcam-active', 'true');
     worker.postMessage({ type: 'SET_OPTIONS', runningMode: 'VIDEO' });
     updateStatus('Webcam running...');
     enableWebcamButton.innerText = 'Disable Webcam';
@@ -371,7 +380,7 @@ function toggleCam() {
   else enableCam();
 }
 
-function stopCam() {
+function stopCam(persistState = true) {
   if (video.srcObject) {
     const stream = video.srcObject as MediaStream;
     stream.getTracks().forEach(t => t.stop());
@@ -379,6 +388,9 @@ function stopCam() {
     document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
+    if (persistState) {
+      localStorage.setItem('mediapipe-webcam-active', 'false');
+    }
   }
 }
 
@@ -434,7 +446,7 @@ function updateInferenceTime(time: number) {
 
 export function cleanupHolisticLandmarker() {
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  stopCam();
+  stopCam(false);
   if (worker) {
     worker.postMessage({ type: 'CLEANUP' });
     worker.terminate();

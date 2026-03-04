@@ -3,111 +3,60 @@ import {
   FilesetResolver,
   TextEmbedderResult
 } from '@mediapipe/tasks-text';
+import { BaseWorker } from './base-worker';
 
-const basePath = '/mediapipe-samples-web/';
+class TextEmbedderWorker extends BaseWorker<TextEmbedder> {
+  protected async initializeTask(): Promise<void> {
+    const wasmLoaderUrl = `${this.getWasmPath()}/text_wasm_internal.js`;
+    await this.loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
 
-import { loadWasmModule } from '../utils/wasm-loader';
+    const text = await FilesetResolver.forTextTasks(this.getWasmPath());
+    const modelBuffer = await this.loadModelAsset();
 
-let textEmbedder: TextEmbedder | undefined;
-let isInitializing = false;
-
-// Define message types
-type WorkerMessage =
-  | { type: 'INIT'; modelAssetPath: string; delegate?: 'CPU' | 'GPU'; baseUrl?: string }
-  | { type: 'EMBED'; text1: string; text2?: string; timestampMs: number }
-  | { type: 'CLEANUP' };
-
-import { loadModel } from '../utils/model-loader';
-
-// ... (rest of imports)
-
-
-
-async function initEmbedder(data: any) {
-  if (isInitializing) return;
-  isInitializing = true;
-
-  try {
-    if (textEmbedder) {
-      textEmbedder.close();
-      textEmbedder = undefined;
-    }
-
-    const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
-    const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
-
-    // Inject the loader using our shared utility
-    await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;'); // The 'true' indicates appendScript (removed as it was invalid)
-    // The local polyfill `self.createMediapipeTasksTextModule = factory;` is removed as loadWasmModule now handles appending.
-
-    const text = await FilesetResolver.forTextTasks(wasmPath);
-
-    const modelBuffer = await loadModel(data.modelAssetPath, (loaded, total) => {
-      self.postMessage({
-        type: 'LOAD_PROGRESS',
-        loaded,
-        total
-      });
-    });
-
-    textEmbedder = await TextEmbedder.createFromOptions(text, {
+    this.taskInstance = await TextEmbedder.createFromOptions(text, {
       baseOptions: {
         modelAssetBuffer: new Uint8Array(modelBuffer),
-        delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
+        delegate: this.currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
       }
     });
+  }
 
-    self.postMessage({ type: 'INIT_DONE' });
+  protected async updateOptions(): Promise<void> {
+  // TextEmbedder does not have runtime updateable options
+  }
 
-  } catch (error: any) {
-    console.error("Text Embedder Init Error:", error);
-    self.postMessage({ type: 'ERROR', error: error.message });
-  } finally {
-    isInitializing = false;
+  protected async handleCustomMessage(data: any): Promise<void> {
+    if (data.type === 'EMBED') {
+      if (!this.taskInstance || !data.text1) {
+        self.postMessage({ type: 'ERROR', error: 'Not initialized or missing text' });
+        return;
+      }
+
+      try {
+        const result1 = this.taskInstance.embed(data.text1);
+        let result2: TextEmbedderResult | undefined;
+        let similarity: number | undefined;
+
+        if (data.text2) {
+          result2 = this.taskInstance.embed(data.text2);
+          const embedding1 = result1.embeddings[0];
+          const embedding2 = result2.embeddings[0];
+          similarity = TextEmbedder.cosineSimilarity(embedding1, embedding2);
+        }
+
+        (self as any).postMessage({
+          type: 'EMBED_RESULT',
+          result1,
+          result2,
+          similarity,
+          timestampMs: data.timestampMs
+        });
+      } catch (error: any) {
+        console.error("Worker embed error:", error);
+        self.postMessage({ type: 'ERROR', error: error.message || 'Embed failed' });
+      }
+    }
   }
 }
 
-self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-  const { type } = event.data;
-
-  switch (type) {
-    case 'INIT':
-      await initEmbedder(event.data);
-      break;
-    case 'EMBED':
-      if (textEmbedder && 'text1' in event.data) {
-        try {
-          const result1 = textEmbedder.embed(event.data.text1);
-          let result2: TextEmbedderResult | undefined;
-          let similarity: number | undefined;
-
-          if (event.data.text2) {
-            result2 = textEmbedder.embed(event.data.text2);
-            // Compute similarity
-            const embedding1 = result1.embeddings[0];
-            const embedding2 = result2.embeddings[0];
-            similarity = TextEmbedder.cosineSimilarity(embedding1, embedding2);
-          }
-
-          self.postMessage({
-            type: 'EMBED_RESULT',
-            result1,
-            result2,
-            similarity,
-            timestampMs: event.data.timestampMs
-          });
-        } catch (error) {
-          self.postMessage({ type: 'ERROR', error: error instanceof Error ? error.message : String(error) });
-        }
-      }
-      break;
-    case 'CLEANUP':
-      if (textEmbedder) {
-        textEmbedder.close();
-        textEmbedder = undefined;
-      }
-      break;
-  }
-};
-
-
+new TextEmbedderWorker();

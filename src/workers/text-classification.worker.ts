@@ -2,103 +2,54 @@ import {
   TextClassifier,
   FilesetResolver
 } from '@mediapipe/tasks-text';
-import { loadModel } from '../utils/model-loader';
+import { BaseWorker } from './base-worker';
 
-const basePath = '/mediapipe-samples-web/';
-
-import { loadWasmModule } from '../utils/wasm-loader';
-
-let textClassifier: TextClassifier | undefined;
-let isInitializing = false;
-
-// Define message types
-type WorkerMessage =
-  | { type: 'INIT'; modelAssetPath: string; delegate?: 'CPU' | 'GPU'; runningMode?: 'TEXT'; maxResults?: number; scoreThreshold?: number; baseUrl?: string }
-  | { type: 'CLASSIFY'; text: string; timestampMs: number }
-  | { type: 'CLEANUP' };
-
-self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-  const { type } = event.data;
-
-  switch (type) {
-    case 'INIT':
-      await initClassifier(event.data);
-      break;
-    case 'CLASSIFY':
-      if (textClassifier && 'text' in event.data) {
-        try {
-          const result = textClassifier.classify(event.data.text);
-          self.postMessage({
-            type: 'CLASSIFY_RESULT',
-            result,
-            timestampMs: event.data.timestampMs
-          });
-        } catch (error) {
-          self.postMessage({ type: 'ERROR', error: error instanceof Error ? error.message : String(error) });
-        }
-      }
-      break;
-    case 'CLEANUP':
-      if (textClassifier) {
-        textClassifier.close();
-        textClassifier = undefined;
-      }
-      break;
-  }
-};
-
-async function initClassifier(data: any) {
-  if (isInitializing) return;
-  isInitializing = true;
-
-  try {
-    if (textClassifier) {
-      textClassifier.close();
-      textClassifier = undefined;
-    }
-
-    const wasmPath = new URL(`${data.baseUrl || basePath}wasm`, self.location.origin).href;
-
+class TextClassifierWorker extends BaseWorker<TextClassifier> {
+  protected async initializeTask(): Promise<void> {
+    const wasmLoaderUrl = `${this.getWasmPath()}/text_wasm_internal.js`;
     // Workaround for Vite + MediaPipe WASM loading in workers
-    // Workaround for Vite + MediaPipe WASM loading in workers
-    const wasmLoaderUrl = `${wasmPath}/text_wasm_internal.js`;
-
-    // Inject the loader using our shared utility
-    const factory = await loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
+    const factory = await this.loadWasmModule(wasmLoaderUrl, ';ModuleFactory;');
     // @ts-ignore
     self.createMediapipeTasksTextModule = factory;
 
+    const vision = await FilesetResolver.forTextTasks(this.getWasmPath());
+    const modelBuffer = await this.loadModelAsset();
 
-
-    // ...
-
-    const vision = await FilesetResolver.forTextTasks(wasmPath);
-
-    // Fetch model manually for progress reporting
-    const modelBuffer = await loadModel(data.modelAssetPath, (loaded, total) => {
-      self.postMessage({
-        type: 'LOAD_PROGRESS',
-        loaded,
-        total
-      });
-    });
-
-    textClassifier = await TextClassifier.createFromOptions(vision, {
+    this.taskInstance = await TextClassifier.createFromOptions(vision, {
       baseOptions: {
         modelAssetBuffer: new Uint8Array(modelBuffer),
-        delegate: data.delegate === 'GPU' ? 'GPU' : 'CPU',
+        delegate: this.currentOptions.delegate === 'GPU' ? 'GPU' : 'CPU',
       },
-      maxResults: data.maxResults || 3,
-      scoreThreshold: data.scoreThreshold || 0,
+      maxResults: this.currentOptions.maxResults || 3,
+      scoreThreshold: this.currentOptions.scoreThreshold || 0,
     });
+  }
 
+  protected async updateOptions(): Promise<void> {
+    // TextClassifier might not have dynamically updateable options in the same way,
+    // but if it does, we implement it here. Otherwise, leave empty.
+  }
 
-    self.postMessage({ type: 'INIT_DONE' });
+  protected async handleCustomMessage(data: any): Promise<void> {
+    if (data.type === 'CLASSIFY') {
+      if (!this.taskInstance || !data.text) {
+        self.postMessage({ type: 'ERROR', error: 'Not initialized or missing text' });
+        return;
+      }
 
-  } catch (error: any) {
-    console.error("Text Classifier Worker Init Error:", error);
-    self.postMessage({ type: 'ERROR', error: error.message });
-  } finally {
-    isInitializing = false;
+      try {
+        const result = this.taskInstance.classify(data.text);
+        (self as any).postMessage({
+          type: 'CLASSIFY_RESULT',
+          result,
+          timestampMs: data.timestampMs
+        });
+      } catch (error: any) {
+        console.error("Worker classify error:", error);
+        self.postMessage({ type: 'ERROR', error: error.message || 'Classification failed' });
+      }
+    }
   }
 }
+
+new TextClassifierWorker();

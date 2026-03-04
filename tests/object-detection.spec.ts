@@ -107,6 +107,8 @@ test.describe('Object Detection Task', () => {
     await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
+    await page.click('#webcamButton');
+
     // Wait for App to mount constraints via getUserMedia()
     await expect(page.locator('#webcamButton')).not.toHaveText('Initializing...', { timeout: 15000 });
     await expect(page.locator('#status-message')).toHaveText(/(Webcam running\.\.\.)|(Done)|(Ready)/, { timeout: 15000 });
@@ -123,7 +125,7 @@ test.describe('Object Detection Task', () => {
     expect(bgColor).toMatch(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/);
 
     // Disable
-    await page.click('#webcamButton', { force: true });
+    await page.click('#webcamButton');
     await expect(page.locator('#webcamButton')).toHaveText('Enable Webcam', { timeout: 10000 });
   });
 

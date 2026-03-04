@@ -169,13 +169,15 @@ test.describe('Image Segmentation Task', () => {
     await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
+    await page.click('#webcamButton');
+
     await expect(page.locator('#webcamButton')).not.toHaveText('Initializing...', { timeout: 15000 });
 
     // Wait for Worker to actually process and return at least ONE video frame through GPU/CPU pipeline
     await expect(page.locator('#inference-time')).not.toHaveText('Inference Time: - ms', { timeout: 30000 });
 
     // Disable
-    await page.click('#webcamButton', { force: true });
+    await page.click('#webcamButton');
     await expect(page.locator('#webcamButton')).toHaveText('Enable Webcam', { timeout: 10000 });
   });
 

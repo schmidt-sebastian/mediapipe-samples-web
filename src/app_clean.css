@@ -172,9 +172,12 @@ body {
 
 .cam-container {
   flex: 1;
+  min-height: 0;
+    min-width: 0;
   position: relative;
   width: 100%;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   background: transparent;
@@ -384,6 +387,8 @@ select:focus {
 /* Output Panel (Right) */
 .output-panel {
   flex: 1;
+  min-height: 0;
+    min-width: 0;
   display: flex;
   flex-direction: column;
   background: #f0f2f5;
@@ -433,28 +438,34 @@ select:focus {
 
 .viewport {
   flex: 1;
+  min-height: 0;
+    min-width: 0;
   background: var(--surface);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+    overflow-x: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+    padding: 24px 0;
 }
 
 .view-content {
   width: 100%;
-  height: 100%;
   display: none;
 }
 
 .view-content.active {
+  flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .audio-visualizer-container {
@@ -481,7 +492,12 @@ select:focus {
 .video-wrapper {
   position: relative;
   width: 100%;
+  height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
   max-width: 640px;
+  max-height: 480px;
   aspect-ratio: auto;
     /* Let intrinsic video aspect ratio govern it */
   display: grid;
@@ -496,7 +512,7 @@ select:focus {
 video {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
     /* Force intrinsic aspect ratio to size the grid container */
   object-fit: contain;
   /* FIXED: Ensure video fits fully so coords match */
@@ -530,7 +546,7 @@ video {
 /* Action Button: Fixes position and style */
 /* Action Button: Flow normally instead of absolute to avoid overlap */
 .action-button {
-  margin-top: 20px;
+  margin-top: 10px;
   background: var(--primary);
   color: white;
   border: none;
@@ -548,11 +564,10 @@ video {
 }
 
 /* Specific override for webcam view if needed, but for audio we want it relative */
-/* Specific override for webcam view if needed, but for audio we want it relative */
 .cam-container>.action-button,
 .cam-container .webcam-controls {
   position: absolute;
-  bottom: 30px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
@@ -960,7 +975,7 @@ video {
 }
 /* Classification Results */
 .classification-results {
-  margin-top: 20px;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1042,12 +1057,13 @@ video {
 
 /* Updated Classification Results Styling */
 .classification-results {
-  margin-top: 24px;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
   min-height: 160px;
+  flex-shrink: 0;
 }
 
 .classification-row {

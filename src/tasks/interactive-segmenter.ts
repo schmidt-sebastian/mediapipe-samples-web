@@ -239,15 +239,18 @@ function setupUI() {
     testImage.onload(new Event('load'));
   }
 
-  // View Toggle
+  const storedMode = localStorage.getItem('mediapipe-running-mode') as 'webcam' | 'image';
+  const initialMode = storedMode || 'webcam';
+
   new ViewToggle(
     'view-mode-toggle',
     [
       { label: 'Webcam', value: 'webcam' },
       { label: 'Image', value: 'image' }
     ],
-    'webcam', // Default active
+    initialMode,
     (value) => {
+      localStorage.setItem('mediapipe-running-mode', value);
       const viewImage = document.getElementById('view-image')!;
       const viewWebcam = document.getElementById('view-webcam')!;
 
@@ -256,12 +259,14 @@ function setupUI() {
         viewImage.style.display = 'none';
         viewWebcam.classList.add('active');
         viewImage.classList.remove('active');
-        // Let's actually trigger enable webcam if it's the active tab, but only on selection
+        const isWebcamActive = localStorage.getItem('mediapipe-webcam-active') === 'true';
+        if (isWebcamActive && !stream) toggleWebcam();
       } else {
         viewImage.style.display = '';
         viewWebcam.style.display = 'none';
         viewImage.classList.add('active');
         viewWebcam.classList.remove('active');
+        if (stream) toggleWebcam();
       }
     }
   );
@@ -306,6 +311,7 @@ async function toggleWebcam() {
       webcamCapture.style.display = 'none';
       webcamOverlay.style.display = 'none';
       webcamButton.innerText = 'Disable Webcam';
+      localStorage.setItem('mediapipe-webcam-active', 'true');
       freezeButton.disabled = false;
       isFrozen = false;
       freezeButton.innerText = 'Freeze & Segment';
@@ -321,6 +327,7 @@ async function toggleWebcam() {
     video.srcObject = null;
     document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     webcamButton.innerText = 'Enable Webcam';
+    localStorage.setItem('mediapipe-webcam-active', 'false');
     freezeButton.disabled = true;
     isFrozen = false;
     // Hide overlay

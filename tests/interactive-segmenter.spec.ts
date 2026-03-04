@@ -11,16 +11,20 @@ test.describe('Interactive Segmenter Task', () => {
     // Wait for model ready
     await expect(page.locator('#status-message')).toHaveText('Ready', { timeout: 30000 });
 
+    // Switch to Image view mode
+    await page.click('button[data-value="image"]');
+
+    // Wait for view change to propagate and image to be visible
+    const testImage = page.locator('#test-image');
+    await expect(testImage).toBeVisible();
+
     // Click on the image to trigger segmentation
     // Wait for Ready status before interaction
     await expect(page.locator('#status-message')).toHaveText('Ready', { timeout: 30000 });
 
-    // Switch to Image view mode
-    await page.click('button[data-value="image"]');
-
     // We click near the center of the image (assuming cat/dog object is central)
-    const testImage = page.locator('#test-image');
-    await expect(testImage).toBeVisible();
+    // Adding minor delay to ensure event listeners are fully attached to new view state
+    await page.waitForTimeout(500); 
     await testImage.click({ position: { x: 150, y: 150 } }); // Assuming 300x300 image roughly
 
     // Wait for "Done in ..." status
