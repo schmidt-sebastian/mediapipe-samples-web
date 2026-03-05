@@ -614,10 +614,6 @@ video {
   transform: none;
     /* Remove translateX */
   }
-  
-                .cam-container>.action-button:hover {
-                  transform: translateX(-50%);
-}
 
 /* Image Preview */
 .canvas-wrapper {

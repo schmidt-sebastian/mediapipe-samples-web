@@ -64,12 +64,19 @@
                     <canvas id="webcam-capture" class="webcam-capture"></canvas>
                     <canvas id="webcam-overlay" class="webcam-overlay"></canvas>
                   </div>
-                  <div class="webcam-controls">
-                    <button id="webcamButton" class="action-button">Enable Webcam</button>
-                    <button id="freezeButton" class="action-button secondary" disabled>Freeze & Segment</button>
-                  </div>
                 </div>
-      </div>
+              </div>
+              <div id="webcam-controls-container"
+                style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
+                <div class="webcam-controls" style="display: flex; gap: 10px;">
+                  <button id="webcamButton" class="action-button">
+                    <span class="material-icons">videocam</span> Enable Webcam
+                  </button>
+                  <button id="freezeButton" class="action-button secondary" disabled>
+                    <span class="material-icons">camera</span> Freeze & Segment
+                  </button>
+                </div>
+              </div>
     </div>
   </div>
 </div>
