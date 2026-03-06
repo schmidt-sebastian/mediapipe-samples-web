@@ -242,6 +242,30 @@ function setupUI() {
   const storedMode = localStorage.getItem('mediapipe-running-mode') as 'webcam' | 'image';
   const initialMode = storedMode || 'webcam';
 
+  const switchView = (value: 'webcam' | 'image') => {
+    localStorage.setItem('mediapipe-running-mode', value);
+    const viewImage = document.getElementById('view-image')!;
+    const viewWebcam = document.getElementById('view-webcam')!;
+    const webcamControls = document.getElementById('webcam-controls-container');
+
+    if (value === 'webcam') {
+      viewWebcam.style.display = '';
+      viewImage.style.display = 'none';
+      viewWebcam.classList.add('active');
+      viewImage.classList.remove('active');
+      if (webcamControls) webcamControls.style.display = 'flex';
+      const isWebcamActive = localStorage.getItem('mediapipe-webcam-active') === 'true';
+      if (isWebcamActive && !stream) toggleWebcam();
+    } else {
+      viewImage.style.display = '';
+      viewWebcam.style.display = 'none';
+      viewImage.classList.add('active');
+      viewWebcam.classList.remove('active');
+      if (webcamControls) webcamControls.style.display = 'none';
+      if (stream) toggleWebcam();
+    }
+  };
+
   new ViewToggle(
     'view-mode-toggle',
     [
@@ -250,37 +274,11 @@ function setupUI() {
     ],
     initialMode,
     (value) => {
-      localStorage.setItem('mediapipe-running-mode', value);
-      const viewImage = document.getElementById('view-image')!;
-      const viewWebcam = document.getElementById('view-webcam')!;
-      const webcamControls = document.getElementById('webcam-controls-container');
-
-      if (value === 'webcam') {
-        viewWebcam.style.display = '';
-        viewImage.style.display = 'none';
-        viewWebcam.classList.add('active');
-        viewImage.classList.remove('active');
-        if (webcamControls) webcamControls.style.display = 'flex';
-        const isWebcamActive = localStorage.getItem('mediapipe-webcam-active') === 'true';
-        if (isWebcamActive && !stream) toggleWebcam();
-      } else {
-        viewImage.style.display = '';
-        viewWebcam.style.display = 'none';
-        viewImage.classList.add('active');
-        viewWebcam.classList.remove('active');
-        if (webcamControls) webcamControls.style.display = 'none';
-        if (stream) toggleWebcam();
-      }
+      switchView(value as 'webcam' | 'image');
     }
   );
 
-  // Initialize view properly on load
-  const viewToggleButtons = document.querySelectorAll('#view-mode-toggle button');
-  viewToggleButtons.forEach(btn => {
-    if ((btn as HTMLButtonElement).dataset.value === 'webcam') {
-      btn.classList.add('active'); // Ensure initial state matches
-    }
-  });
+  switchView(initialMode);
 
   modelSelector = new ModelSelector(
     'model-selector-container',
@@ -333,9 +331,11 @@ async function toggleWebcam() {
     localStorage.setItem('mediapipe-webcam-active', 'false');
     freezeButton.disabled = true;
     isFrozen = false;
-    // Hide overlay
+    // Hide and clear overlay
     webcamOverlay.style.display = 'none';
     webcamCapture.style.display = 'none';
+    overlayCtx.clearRect(0, 0, webcamOverlay.width, webcamOverlay.height);
+    webcamCtx.clearRect(0, 0, webcamCapture.width, webcamCapture.height);
     video.style.display = 'block';
   }
 }

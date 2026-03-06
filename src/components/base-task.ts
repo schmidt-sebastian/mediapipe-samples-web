@@ -403,6 +403,10 @@ export abstract class BaseTask {
       if (this.enableWebcamButton) this.enableWebcamButton.innerText = 'Enable Webcam';
       if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
 
+      if (this.canvasCtx && this.canvasElement) {
+        this.canvasCtx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+      }
+
       if (persistState) {
         localStorage.setItem('mediapipe-webcam-active', 'false');
       }
