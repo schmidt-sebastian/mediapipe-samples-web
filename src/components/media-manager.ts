@@ -93,7 +93,6 @@ export class MediaManager {
     const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
     const imagePreviewContainer = document.getElementById('image-preview-container');
     const testImage = document.getElementById('test-image') as HTMLImageElement;
-    const dropzone = document.querySelector('.upload-dropzone') as HTMLElement;
     const dropzoneContent = document.querySelector('.dropzone-content') as HTMLElement;
 
     if (testImage?.src && dropzoneContent) {
