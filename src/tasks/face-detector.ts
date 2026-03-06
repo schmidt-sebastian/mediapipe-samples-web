@@ -185,9 +185,11 @@ function setupUI() {
 
   const switchView = (mode: 'VIDEO' | 'IMAGE') => {
     localStorage.setItem('mediapipe-running-mode', mode);
+    const webcamControls = document.getElementById('webcam-controls-container');
     if (mode === 'VIDEO') {
       viewWebcam.classList.add('active');
       viewImage.classList.remove('active');
+      if (webcamControls) webcamControls.style.display = 'flex';
       runningMode = 'VIDEO';
       worker?.postMessage({
         type: 'SET_OPTIONS',
@@ -200,6 +202,7 @@ function setupUI() {
     } else {
       viewWebcam.classList.remove('active');
       viewImage.classList.add('active');
+      if (webcamControls) webcamControls.style.display = 'none';
       runningMode = 'IMAGE';
       worker?.postMessage({
         type: 'SET_OPTIONS',

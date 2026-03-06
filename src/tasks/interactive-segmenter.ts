@@ -253,12 +253,14 @@ function setupUI() {
       localStorage.setItem('mediapipe-running-mode', value);
       const viewImage = document.getElementById('view-image')!;
       const viewWebcam = document.getElementById('view-webcam')!;
+      const webcamControls = document.getElementById('webcam-controls-container');
 
       if (value === 'webcam') {
         viewWebcam.style.display = '';
         viewImage.style.display = 'none';
         viewWebcam.classList.add('active');
         viewImage.classList.remove('active');
+        if (webcamControls) webcamControls.style.display = 'flex';
         const isWebcamActive = localStorage.getItem('mediapipe-webcam-active') === 'true';
         if (isWebcamActive && !stream) toggleWebcam();
       } else {
@@ -266,6 +268,7 @@ function setupUI() {
         viewWebcam.style.display = 'none';
         viewImage.classList.add('active');
         viewWebcam.classList.remove('active');
+        if (webcamControls) webcamControls.style.display = 'none';
         if (stream) toggleWebcam();
       }
     }
