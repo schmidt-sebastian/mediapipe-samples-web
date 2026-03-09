@@ -201,7 +201,7 @@ export abstract class BaseTask {
     const storedMode = localStorage.getItem('mediapipe-running-mode') as 'VIDEO' | 'IMAGE';
     const initialMode = storedMode || 'IMAGE';
 
-    new ViewToggle(
+    const viewToggle = new ViewToggle(
       'view-mode-toggle',
       [
         { label: 'Webcam', value: 'video' },
@@ -212,6 +212,9 @@ export abstract class BaseTask {
         switchView(value === 'video' ? 'VIDEO' : 'IMAGE');
       }
     );
+
+    // Force UI update for initial state
+    viewToggle.setActive(initialMode.toLowerCase());
 
     switchView(initialMode);
     if (this.enableWebcamButton) {
