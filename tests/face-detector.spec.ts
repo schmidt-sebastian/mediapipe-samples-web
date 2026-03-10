@@ -46,6 +46,29 @@ test.describe('Face Detector Task', () => {
     const inferenceTime = page.locator('#inference-time');
     await expect(inferenceTime).toContainText('ms');
   });
+  
+  test('should draw a face bounding box and confidence label on the default image', async ({ page }) => {
+    await page.click('#view-mode-toggle button[data-value="image"]');
+    await expect(page.locator('#status-message')).toHaveText(/Done in \d+ms/, { timeout: 30000 });
+
+    const hasOverlayPixels = await page.locator('#image-canvas').evaluate((canvas) => {
+      const ctx = (canvas as HTMLCanvasElement).getContext('2d');
+      if (!ctx) return false;
+
+      const { width, height } = canvas as HTMLCanvasElement;
+      const imageData = ctx.getImageData(0, 0, width, height).data;
+
+      for (let i = 3; i < imageData.length; i += 4) {
+        if (imageData[i] !== 0) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    expect(hasOverlayPixels).toBe(true);
+  });
 
   test('should support webcam toggling', async ({ page }) => {
     await page.click('#view-mode-toggle button[data-value="video"]');

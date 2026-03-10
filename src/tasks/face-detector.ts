@@ -108,15 +108,15 @@ function handleWorkerMessage(event: MessageEvent) {
       break;
 
     case 'DETECT_RESULT':
-      const { mode, detections, inferenceTime } = event.data;
+      const { mode, result, inferenceTime } = event.data;
       updateStatus(`Done in ${Math.round(inferenceTime)}ms`);
       updateInferenceTime(inferenceTime);
 
       if (mode === 'IMAGE') {
         const testImage = document.getElementById('test-image') as HTMLImageElement;
-        displayImageDetections(detections, testImage);
+        displayImageDetections(result, testImage);
       } else if (mode === 'VIDEO') {
-        displayVideoDetections(detections);
+        displayVideoDetections(result);
         if (video.srcObject && !video.paused) {
           animationFrameId = window.requestAnimationFrame(predictWebcam);
         }
