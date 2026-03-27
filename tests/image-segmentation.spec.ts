@@ -70,7 +70,7 @@ test.describe('Image Segmentation Task', () => {
 
     // 2. Segment image on CPU
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('.upload-dropzone');
+    await page.click('#re-upload-btn');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
@@ -100,7 +100,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('.upload-dropzone');
+    await page.click('#re-upload-btn');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
@@ -141,7 +141,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#delegate-select')).toHaveValue(/GPU|CPU/);
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('.upload-dropzone');
+    await page.click('#re-upload-btn');
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
@@ -158,7 +158,7 @@ test.describe('Image Segmentation Task', () => {
     await page.waitForTimeout(1000);
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('.upload-dropzone', { force: true });
+    await page.click('#re-upload-btn', { force: true });
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
@@ -199,7 +199,7 @@ test.describe('Image Segmentation Task', () => {
 
     // Verify it detects
     const imgChooserPromise = page.waitForEvent('filechooser');
-    await page.click('.upload-dropzone');
+    await page.click('#re-upload-btn');
     const imgChooser = await imgChooserPromise;
     await imgChooser.setFiles(imagePath);
 
