@@ -84,8 +84,7 @@ export class ViewToggle {
   }
 
   public setActive(value: string) {
-    if (this.activeValue === value) return;
-
+    const isSame = this.activeValue === value;
     this.activeValue = value;
 
     // Update UI
@@ -99,7 +98,9 @@ export class ViewToggle {
       }
     });
 
-    // Trigger callback
-    this.callback(value);
+    // Trigger callback only if it changed
+    if (!isSame) {
+      this.callback(value);
+    }
   }
 }
