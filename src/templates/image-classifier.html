@@ -33,10 +33,12 @@
       </div>
       <input type="range" id="score-threshold" min="0" max="100" step="1" value="0" class="range-slider">
       </div>
-<div class="divider"></div>
-<div id="status-message" class="status-message">Initializing...</div>
-<div id="inference-time" class="inference-time">Inference Time: 0ms</div>
+    <div class="status-group">
+      <div id="status-message" class="status-message">Initializing...</div>
+      <div id="inference-time" class="inference-time">Inference Time: 0ms</div>
+    </div>
   </div>
+
 
   <div class="output-panel">
     <div class="output-header">
@@ -68,13 +70,14 @@
             <video id="webcam" autoplay playsinline></video>
             <canvas id="output_canvas" width="640" height="480" style="display: none;"></canvas>
             </div>
+            <div id="webcam-controls-container"
+              style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
+              <button id="webcamButton" class="action-button">Enable Webcam</button>
+            </div>
             </div>
             </div>
       
       <div id="classification-results" class="classification-results" style="padding: 0 20px; margin-bottom: 20px;"></div>
-      <div id="webcam-controls-container"
-        style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
-        <button id="webcamButton" class="action-button">Enable Webcam</button>
-      </div>
   </div>
 </div>
+

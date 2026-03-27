@@ -149,9 +149,15 @@ class ImageEmbedderTask extends BaseTask {
   private async computeSimilarity(img1: HTMLImageElement, img2: HTMLImageElement) {
     if (!this.worker || !this.isWorkerReady) return;
 
+    if (!img1 || !img2 || img1.naturalWidth === 0 || img2.naturalWidth === 0) {
+      this.updateStatus('Select two images');
+      return;
+    }
+
     this.updateStatus('Computing...');
 
     const bitmap1 = await createImageBitmap(img1);
+
     const bitmap2 = await createImageBitmap(img2);
 
     this.worker.postMessage({

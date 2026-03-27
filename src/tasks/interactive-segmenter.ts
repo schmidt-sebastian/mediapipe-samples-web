@@ -255,11 +255,12 @@ function setupUI() {
     testImage.onload(new Event('load'));
   }
 
-  const storedMode = localStorage.getItem('mediapipe-running-mode') as 'webcam' | 'image';
-  const initialMode = storedMode || 'webcam';
+  const storedMode = localStorage.getItem('mediapipe-running-mode');
+  const initialMode = (storedMode === 'IMAGE' || storedMode === 'image') ? 'image' : 'webcam';
 
   const switchView = (value: 'webcam' | 'image') => {
     localStorage.setItem('mediapipe-running-mode', value);
+
     const viewImage = document.getElementById('view-image')!;
     const viewWebcam = document.getElementById('view-webcam')!;
     const webcamControls = document.getElementById('webcam-controls-container');
@@ -406,7 +407,7 @@ function drawResult(maskData: Uint8Array | null, width: number, height: number, 
 
   for (let i = 0; i < maskData.length; i++) {
     const category = maskData[i];
-    if (category > 0) {
+    if (category === 0) {
       const offset = i * 4;
       data[offset] = 0;     // R
       data[offset + 1] = 0; // G
@@ -414,6 +415,7 @@ function drawResult(maskData: Uint8Array | null, width: number, height: number, 
       data[offset + 3] = 128; // Alpha
     }
   }
+
 
   ctx.putImageData(imageData, 0, 0);
 }

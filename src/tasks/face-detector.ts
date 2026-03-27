@@ -444,9 +444,11 @@ function stopCam() {
     document.getElementById('webcam-placeholder')?.classList.remove('hidden');
     enableWebcamButton.innerText = 'Enable Webcam';
     cancelAnimationFrame(animationFrameId);
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     localStorage.setItem('mediapipe-webcam-active', 'false');
   }
 }
+
 
 async function predictWebcam() {
   if (runningMode === 'IMAGE') {

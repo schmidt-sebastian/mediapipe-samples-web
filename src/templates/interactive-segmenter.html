@@ -18,19 +18,23 @@
       </div>
       </div>
       <div class="divider"></div>
-      <div class="instructions">
-        <p><strong>Instructions:</strong> Click on an object in the image to segment it.</p>
-      </div>
-<div class="divider"></div>
-<div id="status-message" class="status-message">Initializing...</div>
-<div id="inference-time" class="inference-time">Inference Time: 0ms</div>
+    <div class="status-group">
+      <div id="status-message" class="status-message">Initializing...</div>
+      <div id="inference-time" class="inference-time">Inference Time: 0ms</div>
+    </div>
   </div>
+
 
   <div class="output-panel">
     <div class="output-header">
       <h2>Interactive Segmenter</h2>
       <div id="view-mode-toggle"></div>
     </div>
+    
+    <div class="instructions" style="padding: 10px 20px; border-bottom: 1px solid #eee;">
+      <p><strong>Instructions:</strong> Click on an object in the image to segment it.</p>
+    </div>
+
   
     <div class="viewport">
       <div id="view-image" class="view-content">
@@ -64,19 +68,20 @@
                     <canvas id="webcam-capture" class="webcam-capture"></canvas>
                     <canvas id="webcam-overlay" class="webcam-overlay"></canvas>
                   </div>
-                </div>
-              </div>
-              <div id="webcam-controls-container"
-                style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
-                <div class="webcam-controls" style="display: flex; gap: 10px;">
-                  <button id="webcamButton" class="action-button">
-                    <span class="material-icons">videocam</span> Enable Webcam
-                  </button>
-                  <button id="freezeButton" class="action-button secondary" disabled>
-                    <span class="material-icons">camera</span> Freeze & Segment
-                  </button>
+                  <div id="webcam-controls-container"
+                    style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
+                    <div class="webcam-controls" style="display: flex; gap: 10px;">
+                      <button id="webcamButton" class="action-button">
+                        <span class="material-icons">videocam</span> Enable Webcam
+                      </button>
+                      <button id="freezeButton" class="action-button secondary" disabled>
+                        <span class="material-icons">camera</span> Freeze & Segment
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
     </div>
   </div>
 </div>
+

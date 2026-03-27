@@ -40,10 +40,12 @@
 
         <div class="divider"></div>
 
-        <!-- Status Section -->
-        <div id="status-message" class="status-message">Ready</div>
-        <div id="inference-time" class="inference-time">Inference Time: - ms</div>
+        <div class="status-group">
+            <div id="status-message" class="status-message">Ready</div>
+            <div id="inference-time" class="inference-time">Inference Time: - ms</div>
+        </div>
     </div>
+
 
     <!-- Output on Right -->
     <div class="output-panel">
@@ -66,17 +68,17 @@
                         <canvas id="output_canvas"></canvas>
                     </div>
                 </div>
-            </div>
-
-            <div id="webcam-controls-container"
-                style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
-                <button id="webcamButton" class="action-button">
-                    <span class="material-icons">videocam</span> Enable Webcam
-                </button>
+                <div id="webcam-controls-container"
+                    style="display: none; justify-content: center; width: 100%; margin-top: auto; padding-bottom: 20px;">
+                    <button id="webcamButton" class="action-button">
+                        <span class="material-icons">videocam</span> Enable Webcam
+                    </button>
+                </div>
             </div>
 
             <!-- Image View -->
             <div id="view-image" class="view-content active">
+
                 <div class="upload-dropzone">
                     <div class="dropzone-content" style="display: none;">
                         <span class="material-icons large-icon">image</span>

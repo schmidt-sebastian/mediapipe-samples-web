@@ -19,10 +19,12 @@
       </div>
     </div>
 
-    <div class="divider"></div>
+        <div class="status-group">
+            <div id="status-message" class="status-message">Initializing...</div>
+            <div id="inference-time" class="inference-time">Inference Time: - ms</div>
+        </div>
+    </div>
 
-    <div id="status-message" class="status-message">Initializing...</div>
-  </div>
 
   <!-- Output on Right -->
   <div class="output-panel">
@@ -79,10 +81,7 @@
           </div>
         </div>
         </div>
-        
-        <div id="inference-time" class="inference-time"
-          style="padding: 10px 20px; text-align: right; color: var(--text-secondary); font-size: 12px;">Inference Time: -
-          ms</div>
+
         
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay">
