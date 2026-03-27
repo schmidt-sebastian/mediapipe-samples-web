@@ -29,6 +29,9 @@ test.describe('Image Segmentation Task', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    // Clear local storage to ensure fresh start
+    await page.addInitScript(() => window.localStorage.clear());
+    
     // Put param before hash so visual regression works without reliance on fallback
     await page.goto('?delegate=CPU#/vision/image_segmenter');
     page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));

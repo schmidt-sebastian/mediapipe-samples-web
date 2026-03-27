@@ -32,6 +32,9 @@ test.describe('Face Detector Task', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    // Clear local storage to ensure fresh start
+    await page.addInitScript(() => window.localStorage.clear());
+
     page.on('console', msg => {
       if (msg.type() === 'error') console.error(`[BROWSER ERROR] ${msg.text()}`);
     });

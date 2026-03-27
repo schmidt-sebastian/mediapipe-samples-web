@@ -11,7 +11,7 @@ export default defineConfig({
   timeout: 120000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  workers: process.env.CI ? 2 : 1,
+  workers: 1,
   reporter: 'html',
   snapshotPathTemplate: '{testDir}/__snapshots__/{arg}{ext}',
   use: {
