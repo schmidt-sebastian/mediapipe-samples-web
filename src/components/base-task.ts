@@ -413,7 +413,7 @@ export abstract class BaseTask {
   }
 
   protected stopCam(persistState = true) {
-    if (this.video.srcObject) {
+    if (this.video && this.video.srcObject) {
       const stream = this.video.srcObject as MediaStream;
       const tracks = stream.getTracks();
       tracks.forEach((track) => track.stop());
