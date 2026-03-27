@@ -152,3 +152,11 @@ window.addEventListener('load', router);
 
 // Initialize router immediately to handle initial load
 router();
+
+// Expose cleanup method for testing environments to prevent leaks between tests
+(window as any).cleanupActiveTask = () => {
+  if (currentCleanup) {
+    currentCleanup();
+    currentCleanup = undefined;
+  }
+};

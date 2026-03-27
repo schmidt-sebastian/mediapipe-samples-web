@@ -54,6 +54,14 @@ test.describe('Image Segmentation Task', () => {
     });
   });
 
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      if ((window as any).cleanupActiveTask) {
+        (window as any).cleanupActiveTask();
+      }
+    });
+  });
+
   test('should verify image segmentation cycle (Defaults, CPU, Confidence, Opacity)', async ({ page }) => {
     // 1. Check default settings
     await expect(page.locator('.model-select')).toHaveValue('deeplab_v3');
