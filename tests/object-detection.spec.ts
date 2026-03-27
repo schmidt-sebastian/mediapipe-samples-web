@@ -54,33 +54,31 @@ test.describe('Object Detection Task', () => {
     });
   });
 
-  test('should detect objects on CPU and verify defaults', async ({ page }) => {
-  // Check default settings
+  test('should verify full object detection cycle (CPU, GPU, Webcam)', async ({ page }) => {
+    // 1. Check default settings
     await expect(page.locator('.model-select')).toHaveValue('efficientdet_lite0');
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
 
-    // Upload Image
+    // 2. Upload Image & Run CPU Detection
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.click('#view-mode-toggle button[data-value="image"]'); // Switch to Image tab
     await page.click('.upload-dropzone'); // Click dropzone to trigger
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(imagePath);
 
-    // Wait for processing
     await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 30000 });
 
     // Check results
     await expect(page.locator('#inference-time')).toContainText('Inference Time:');
     await expect(page.locator('#inference-time')).not.toContainText('- ms');
 
-    // Verify detection logic
     const resultsText = await page.locator('#test-results').textContent();
     const detections = JSON.parse(resultsText || '[]');
     expect(detections.length).toBeGreaterThan(0);
     const firstCat = detections[0].categories[0];
     expect(firstCat.categoryName.toLowerCase()).toContain('dog');
 
-    // Test Max Results & Threshold changes in same session
+    // 3. Test Max Results & Threshold changes
     await page.fill('#score-threshold', '0.1');
     await page.fill('#max-results', '5');
     await page.locator('#score-threshold').dispatchEvent('input');
@@ -89,61 +87,33 @@ test.describe('Object Detection Task', () => {
     await expect(page.locator('#score-threshold-value')).toHaveText('0.1');
     await expect(page.locator('#max-results-value')).toHaveText('5');
 
-    // We expect it to re-run or be ready
     await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
-  });
 
-  test.skip('should handle model switching', async ({ page }) => {
-    await page.selectOption('.model-select', 'efficientdet_lite2');
-    await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)/, { timeout: 90000 });
-
-    // Wait for worker re-instantiation
-    await page.waitForTimeout(1000);
-
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#view-mode-toggle button[data-value="image"]');
-    await page.click('.upload-dropzone', { force: true });
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(imagePath);
-
-    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 30000 });
-    const resultsText = await page.locator('#test-results').textContent();
-    expect(JSON.parse(resultsText || '[]').length).toBeGreaterThan(0);
-  });
-
-  test('should handle delegate switching to GPU', async ({ page }) => {
-    // Note: CPU is forced in beforeAll, so changing here triggers initialization.
+    // 4. Switch to GPU
     await page.selectOption('#delegate-select', 'GPU');
-
-    // Note: If running on a system without a GPU, it might fallback to CPU and warn, but it should still become Ready.
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)|(Done)/, { timeout: 90000 });
-  });
 
-  test('should support webcam toggling and have transparent background', async ({ page }) => {
+    // 5. Webcam Toggling
     await page.click('#view-mode-toggle button[data-value="video"]');
     await page.waitForSelector('#webcamButton:not([disabled])');
 
     await page.click('#webcamButton');
 
-    // Wait for App to mount constraints via getUserMedia()
     await expect(page.locator('#webcamButton')).not.toHaveText('Initializing...', { timeout: 15000 });
     await expect(page.locator('#status-message')).toHaveText(/(Webcam running\.\.\.)|(Done)|(Ready)/, { timeout: 15000 });
 
-    // Check transparency here while webcam section is active
     const camContainer = page.locator('.cam-container');
     await expect(camContainer).toBeVisible();
 
     const bgColor = await camContainer.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
-    console.log(`[Test] Cam Container BG: ${bgColor}`);
-    // Expect transparent (rgba(0, 0, 0, 0)) or similar
     expect(bgColor).toMatch(/rgba?\(0,\s*0,\s*0,\s*0\)|transparent/);
 
-    // Disable
     await page.click('#webcamButton');
     await expect(page.locator('#webcamButton')).toHaveText('Enable Webcam', { timeout: 10000 });
   });
+
 
   test('should handle custom model uploads', async ({ page }) => {
     const modelPath = path.resolve(__dirname, 'assets', 'efficientdet_lite0.tflite');

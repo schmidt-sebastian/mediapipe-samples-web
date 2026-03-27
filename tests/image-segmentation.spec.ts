@@ -51,15 +51,13 @@ test.describe('Image Segmentation Task', () => {
     });
   });
 
-  test('should load with default settings', async ({ page }) => {
+  test('should verify image segmentation cycle (Defaults, CPU, Confidence, Opacity)', async ({ page }) => {
+    // 1. Check default settings
     await expect(page.locator('.model-select')).toHaveValue('deeplab_v3');
     await expect(page.locator('#delegate-select')).toHaveValue('CPU');
     await expect(page.locator('#output-type')).toHaveValue('CATEGORY_MASK');
-  });
 
-  test('should segment image on CPU', async ({ page }) => {
-    await expect(page.locator('#delegate-select')).toHaveValue('CPU');
-
+    // 2. Segment image on CPU
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.click('#view-mode-toggle button[data-value="image"]');
     await page.click('.upload-dropzone');
@@ -71,7 +69,21 @@ test.describe('Image Segmentation Task', () => {
 
     // Verify mask result via visual regression
     await expect(page.locator('#image-canvas')).toHaveScreenshot('golden-mask-cpu.png', { maxDiffPixelRatio: 0.05 });
+
+    // 3. Handle component changes (Confidence Mask)
+    await page.selectOption('#output-type', 'CONFIDENCE_MASKS');
+    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
+    await expect(page.locator('#image-canvas')).toHaveScreenshot('golden-mask-confidence.png', { maxDiffPixelRatio: 0.05 });
+
+    // 4. Handle opacity changes
+    await page.fill('#opacity', '0.2');
+    await page.locator('#opacity').dispatchEvent('input');
+    await page.waitForTimeout(500);
+    await expect(page.locator('#test-results')).toBeAttached();
   });
+
+
+
 
   test('should segment image on CPU explicitly', async ({ page }) => {
     // CPU is now default via URL, but we can still select it to be sure or check it's selected
@@ -98,21 +110,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page).toHaveScreenshot('segmentation-cpu-explicit.png', { maxDiffPixelRatio: 0.2, timeout: 10000 });
   });
 
-  test('should handle component changes (Confidence Mask)', async ({ page }) => {
-    await page.selectOption('#output-type', 'CONFIDENCE_MASKS');
 
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#view-mode-toggle button[data-value="image"]');
-    await page.click('.upload-dropzone');
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(imagePath);
-
-    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
-
-    // Verify mask result
-    // Verify mask result via visual regression (Confidence Mask)
-    await expect(page.locator('#image-canvas')).toHaveScreenshot('golden-mask-confidence.png', { maxDiffPixelRatio: 0.05 });
-  });
 
   test('should segment image on GPU (emulated) @gpu', async ({ page }) => {
     // Listen for console logs to debug fallback
@@ -161,25 +159,7 @@ test.describe('Image Segmentation Task', () => {
     await expect(page.locator('#test-results')).toBeAttached({ timeout: 15000 });
   });
 
-  test('should handle opacity changes', async ({ page }) => {
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.click('#view-mode-toggle button[data-value="image"]');
-    await page.click('.upload-dropzone');
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(imagePath);
 
-    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 15000 });
-
-    // Change Opacity to 0.2
-    await page.fill('#opacity', '0.2');
-    await page.locator('#opacity').dispatchEvent('input');
-
-    // Changing Opacity re-renders visually. Wait for a short bit
-    await page.waitForTimeout(500);
-
-    // We can just verify it doesn't crash and the canvas is still there
-    await expect(page.locator('#test-results')).toBeAttached();
-  });
 
   test('should support webcam toggling', async ({ page }) => {
     await page.click('#view-mode-toggle button[data-value="video"]');

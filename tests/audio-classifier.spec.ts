@@ -38,18 +38,24 @@ test.describe('Audio Classifier Task', () => {
   });
 
 
-  test('should load audio classifier page', async ({ page }) => {
+  test('should verify initial UI state and settings', async ({ page }) => {
+    // 1. Page Load
     await expect(page.locator('.task-container')).toBeVisible();
     await expect(page.locator('h2')).toHaveText('Audio Classifier');
-  });
 
-  test('should show model selection', async ({ page }) => {
+    // 2. Model Selection
     const modelSelect = page.locator('.model-select');
     await expect(modelSelect).toBeVisible();
     await expect(modelSelect).toHaveValue('yamnet');
-  });
 
-  test('should switch between microphone and file tabs', async ({ page }) => {
+    // 3. Max Results
+    const maxResultsInput = page.locator('#max-results');
+    const maxResultsValue = page.locator('#max-results-value');
+    await maxResultsInput.fill('3');
+    await maxResultsInput.evaluate(e => e.dispatchEvent(new Event('input')));
+    await expect(maxResultsValue).toHaveText('3');
+
+    // 4. Tab Switching
     const tabFile = page.locator('#view-mode-toggle button[data-value="file"]');
     const viewFile = page.locator('#view-file');
     const viewMic = page.locator('#view-microphone');
@@ -62,16 +68,6 @@ test.describe('Audio Classifier Task', () => {
     await expect(viewMic).not.toBeVisible();
   });
 
-  test('should handle max results change', async ({ page }) => {
-    const maxResultsInput = page.locator('#max-results');
-    const maxResultsValue = page.locator('#max-results-value');
-
-    await maxResultsInput.fill('3');
-    // Trigger input event
-    await maxResultsInput.evaluate(e => e.dispatchEvent(new Event('input')));
-
-    await expect(maxResultsValue).toHaveText('3');
-  });
 
   // We can't easily test microphone in CI without fake media stream, 
   // but Playwright usually launches with --use-fake-device-for-media-stream if configured.

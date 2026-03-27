@@ -46,11 +46,10 @@ test.describe('Face Detector Task', () => {
     await expect(page.locator('#status-message')).toHaveText(/(Model loaded\. Ready\.)|(Ready)/, { timeout: 30000 });
   });
 
-  test('should load model and handle image upload', async ({ page }) => {
+  test('should load model, handle image upload and render bounding boxes', async ({ page }) => {
     // Check defaults
     await expect(page.locator('.model-select')).toHaveValue('blaze_face_short_range');
 
-    // Upload Image
     // Upload Image
     await page.click('#view-mode-toggle button[data-value="image"]');
     await page.locator('#image-upload').setInputFiles(imagePath);
@@ -61,12 +60,8 @@ test.describe('Face Detector Task', () => {
     // Verify inference time is displayed
     const inferenceTime = page.locator('#inference-time');
     await expect(inferenceTime).toContainText('ms');
-  });
-  
-  test('should draw a face bounding box and confidence label on the default image', async ({ page }) => {
-    await page.click('#view-mode-toggle button[data-value="image"]');
-    await expect(page.locator('#status-message')).toHaveText(/Done in \d+ms/, { timeout: 30000 });
 
+    // Verify canvas pixels (bounding boxes drawn)
     const hasOverlayPixels = await page.locator('#image-canvas').evaluate((canvas) => {
       const ctx = (canvas as HTMLCanvasElement).getContext('2d');
       if (!ctx) return false;
@@ -85,6 +80,7 @@ test.describe('Face Detector Task', () => {
 
     expect(hasOverlayPixels).toBe(true);
   });
+
 
   test('should support webcam toggling', async ({ page }) => {
     await page.click('#view-mode-toggle button[data-value="video"]');
