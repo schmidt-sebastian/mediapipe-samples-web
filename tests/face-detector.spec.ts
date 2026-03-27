@@ -57,8 +57,8 @@ test.describe('Face Detector Task', () => {
     await page.click('#view-mode-toggle button[data-value="image"]');
     await page.locator('#image-upload').setInputFiles(imagePath);
 
-    // Wait for processing
-    await expect(page.locator('#status-message')).toHaveText(/(Done)|(Ready)|(Model loaded)/, { timeout: 30000 });
+    // Wait for processing to complete specifically
+    await expect(page.locator('#status-message')).toHaveText(/Done/, { timeout: 30000 });
 
     // Verify inference time is displayed
     const inferenceTime = page.locator('#inference-time');
